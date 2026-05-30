@@ -1,0 +1,39 @@
+spring:
+  jpa:
+    open-in-view: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        generate_statistics: false
+        order_inserts: true
+        order_updates: true
+        format_sql: true
+        ddl-auto: update
+        jdbc:
+          batch_size: 100
+    show-sql: true
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5435/sales_platform?currentSchema=public}
+    #    url: ${DB_URL:jdbc:postgresql://134.209.244.9:5432/ai_platform?currentSchema=public}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:admin}
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      initialization-fail-timeout: 60000
+      connection-test-query: SELECT 1
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      connection-timeout: 30000
+
+app:
+  jwt:
+    # Generate with: openssl rand -base64 64
+    secret: "CHANGE_ME_TO_A_256BIT_BASE64_ENCODED_SECRET_KEY_FOR_PRODUCTION"
+    expiration-ms: 86400000         # 24 hours
+    refresh-expiration-ms: 604800000 # 7 days
+
+server:
+  port: 8080
