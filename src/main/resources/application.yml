@@ -33,7 +33,7 @@ app:
     # Generate with: openssl rand -base64 64
     secret: "CHANGE_ME_TO_A_256BIT_BASE64_ENCODED_SECRET_KEY_FOR_PRODUCTION"
     expiration-ms: 86400000         # 24 hours
-    refresh-expiration-ms: 604800000 # 7 days
+    refresh-expiration-days: 7 # 7 days
 
 server:
   port: 8080
