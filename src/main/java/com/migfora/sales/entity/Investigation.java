@@ -31,7 +31,7 @@ public class Investigation {
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    private InvestigationStatus status = InvestigationStatus.PENDING;
+    private InvestigationStatus status = InvestigationStatus.OPEN;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "company_id")
@@ -75,7 +75,14 @@ public class Investigation {
 
     private LocalDateTime completedAt;
 
+    @OneToOne(mappedBy = "investigation",
+            cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY)
+    private InvestigationContext context;
+
     public enum InvestigationStatus {
-        PENDING, RUNNING, COMPLETED, FAILED
+        OPEN,       // session created, tasks can be added and run
+        CLOSED,     // manually closed by user
+        ARCHIVED    // old session
     }
 }

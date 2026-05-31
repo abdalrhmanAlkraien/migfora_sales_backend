@@ -1,11 +1,14 @@
 package com.migfora.sales.dto;
 
 import com.migfora.sales.entity.Investigation.InvestigationStatus;
+import com.migfora.sales.entity.ReconTask.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -16,9 +19,36 @@ import java.time.LocalDateTime;
 public class InvestigationDtos {
 
 
+    // ── Requests ──────────────────────────────────────────────────────────────
+
     public record CreateInvestigationRequest(
             @NotNull Long companyId,
             @NotBlank String domain
+    ) {}
+
+    public record RunTasksRequest(
+            @NotEmpty List<ReconTaskType> tasks
+    ) {}
+
+    public record RunAllTasksRequest(
+            boolean includeShogan,
+            boolean includeCensys,
+            boolean includeIpInfo
+    ) {}
+
+    // ── Responses ─────────────────────────────────────────────────────────────
+
+    public record ReconTaskResponse(
+            Long id,
+            ReconTaskType type,
+            ReconTaskStatus status,
+            String result,
+            String rawOutput,
+            String errorMessage,
+            String triggeredBy,
+            LocalDateTime createdAt,
+            LocalDateTime startedAt,
+            LocalDateTime completedAt
     ) {}
 
     public record InvestigationResponse(
@@ -29,17 +59,9 @@ public class InvestigationDtos {
             Long companyId,
             String companyName,
             String triggeredBy,
-            String dnsRecords,
-            String whoisData,
-            String techStack,
-            String openPorts,
-            String subdomains,
-            String sslInfo,
-            String performanceMetrics,
-            String rawFindings,
-            String errorMessage,
+            List<ReconTaskResponse> tasks,
             LocalDateTime createdAt,
-            LocalDateTime completedAt
+            LocalDateTime updatedAt
     ) {}
 
     public record InvestigationSummaryResponse(
@@ -50,7 +72,10 @@ public class InvestigationDtos {
             Long companyId,
             String companyName,
             String triggeredBy,
+            int totalTasks,
+            int completedTasks,
+            int failedTasks,
             LocalDateTime createdAt,
-            LocalDateTime completedAt
+            LocalDateTime updatedAt
     ) {}
 }

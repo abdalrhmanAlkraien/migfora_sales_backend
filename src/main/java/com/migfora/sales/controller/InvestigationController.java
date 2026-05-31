@@ -1,6 +1,8 @@
 package com.migfora.sales.controller;
 
+import com.migfora.sales.dto.InvestigationContextDtos.*;
 import com.migfora.sales.dto.InvestigationDtos.*;
+import com.migfora.sales.service.InvestigationContextService;
 import com.migfora.sales.service.InvestigationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,6 +16,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -29,8 +33,9 @@ public class InvestigationController {
 
 
     private final InvestigationService investigationService;
+    private final InvestigationContextService investigationContextService;
 
-    @Operation(summary = "Trigger a new investigation")
+    @Operation(summary = "Create a new investigation session for a company")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public InvestigationSummaryResponse create(
@@ -39,7 +44,25 @@ public class InvestigationController {
         return investigationService.create(request, jwt.getSubject());
     }
 
-    @Operation(summary = "Get all investigations for a company")
+    @Operation(summary = "Run specific recon tasks — pick what you want")
+    @PostMapping("/{id}/run")
+    public List<ReconTaskResponse> runTasks(
+            @PathVariable Long id,
+            @Valid @RequestBody RunTasksRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return investigationService.runTasks(id, request, jwt.getSubject());
+    }
+
+    @Operation(summary = "Run all recon tasks at once")
+    @PostMapping("/{id}/run-all")
+    public List<ReconTaskResponse> runAll(
+            @PathVariable Long id,
+            @RequestBody RunAllTasksRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return investigationService.runAll(id, request, jwt.getSubject());
+    }
+
+    @Operation(summary = "Get all investigation sessions for a company")
     @GetMapping("/company/{companyId}")
     public Page<InvestigationSummaryResponse> getByCompany(
             @PathVariable Long companyId,
@@ -47,13 +70,29 @@ public class InvestigationController {
         return investigationService.getByCompany(companyId, pageable);
     }
 
-    @Operation(summary = "Get full investigation result by ID")
+    @Operation(summary = "Get full investigation with all task results")
     @GetMapping("/{id}")
     public InvestigationResponse getById(@PathVariable Long id) {
         return investigationService.getById(id);
     }
 
-    @Operation(summary = "Delete investigation")
+    @Operation(summary = "Get a single task result")
+    @GetMapping("/{id}/tasks/{taskId}")
+    public ReconTaskResponse getTask(
+            @PathVariable Long id,
+            @PathVariable Long taskId) {
+        return investigationService.getTask(id, taskId);
+    }
+
+    @Operation(summary = "Close investigation session")
+    @PatchMapping("/{id}/close")
+    public InvestigationSummaryResponse close(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt) {
+        return investigationService.close(id, jwt.getSubject());
+    }
+
+    @Operation(summary = "Delete investigation session")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN_GROUP')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -61,5 +100,11 @@ public class InvestigationController {
             @PathVariable Long id,
             @AuthenticationPrincipal Jwt jwt) {
         investigationService.delete(id, jwt.getSubject());
+    }
+
+    @Operation(summary = "Get shared context for this investigation session")
+    @GetMapping("/{id}/context")
+    public InvestigationContextResponse getContext(@PathVariable Long id) {
+        return investigationContextService.getContext(id);
     }
 }
