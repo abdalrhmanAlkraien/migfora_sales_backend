@@ -1,7 +1,8 @@
 package com.migfora.sales.dto;
 
-import com.migfora.sales.enitty.Company.*;
+import com.migfora.sales.entity.Company.*;
 import jakarta.validation.constraints.NotBlank;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
@@ -10,10 +11,8 @@ import java.time.LocalDateTime;
  * @Date: 31/05/2026
  * @Time: 3:13 PM
  */
+@NoArgsConstructor
 public class CompanyDtos {
-
-
-    private CompanyDtos() {}
 
     public record CreateCompanyRequest(
             @NotBlank String name,

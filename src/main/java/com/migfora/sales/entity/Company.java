@@ -1,4 +1,4 @@
-package com.migfora.sales.enitty;
+package com.migfora.sales.entity;
 
 import jakarta.persistence.*;
 import lombok.*;

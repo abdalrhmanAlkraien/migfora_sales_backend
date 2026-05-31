@@ -1,8 +1,8 @@
 package com.migfora.sales.service;
 
 import com.migfora.sales.dto.CompanyDtos.*;
-import com.migfora.sales.enitty.Company;
-import com.migfora.sales.enitty.Company.*;
+import com.migfora.sales.entity.Company;
+import com.migfora.sales.entity.Company.*;
 import com.migfora.sales.exception.AuthException;
 import com.migfora.sales.repository.CompanyRepository;
 import lombok.RequiredArgsConstructor;

@@ -1,6 +1,6 @@
 package com.migfora.sales.repository;
 
-import com.migfora.sales.enitty.Company;
+import com.migfora.sales.entity.Company;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
