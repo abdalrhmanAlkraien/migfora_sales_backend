@@ -25,22 +25,23 @@ public class SwaggerConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("MIGFORA Sales API")
-                        .description("Authentication and Sales service API documentation")
+                        .description("Internal Sales Intelligence Platform")
                         .version("1.0.0")
                         .contact(new Contact()
                                 .name("MIGFORA")
-                                .email("dev@migfora.com"))
-                        .license(new License()
-                                .name("Private")))
+                                .email("dev@migfora.com")))
                 .addSecurityItem(new SecurityRequirement()
-                        .addList(SECURITY_SCHEME_NAME))
+                        .addList("bearerAuth"))
                 .components(new Components()
-                        .addSecuritySchemes(SECURITY_SCHEME_NAME,
+                        .addSecuritySchemes("bearerAuth",
                                 new SecurityScheme()
-                                        .name(SECURITY_SCHEME_NAME)
+                                        .name("bearerAuth")
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("bearer")
                                         .bearerFormat("JWT")
-                                        .description("Paste your JWT access token here")));
+                                        .description(
+                                                "Get your token from POST /api/v1/auth/login " +
+                                                        "then paste the accessToken here"
+                                        )));
     }
 }

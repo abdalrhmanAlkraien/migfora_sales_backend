@@ -50,6 +50,18 @@ public class GlobalExceptionHandler {
         return errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", null);
     }
 
+    @ExceptionHandler(PasswordChangeRequiredException.class)
+    @ResponseStatus(HttpStatus.PRECONDITION_REQUIRED)   // 428
+    public Map<String, Object> handlePasswordChange(PasswordChangeRequiredException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", LocalDateTime.now().toString());
+        body.put("status", 428);
+        body.put("error", "Password Change Required");
+        body.put("message", ex.getMessage());
+        body.put("session", ex.getSession());
+        return body;
+    }
+
     private Map<String, Object> errorBody(HttpStatus status, String message, Object details) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", LocalDateTime.now().toString());

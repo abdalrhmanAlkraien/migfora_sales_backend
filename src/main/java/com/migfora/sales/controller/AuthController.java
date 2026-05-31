@@ -1,21 +1,20 @@
 package com.migfora.sales.controller;
 
+import com.migfora.sales.exception.PasswordChangeRequiredException;
+import com.migfora.sales.service.CognitoAdminService;
 import com.migfora.sales.dto.AuthDtos.*;
-import com.migfora.sales.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.oauth2.jwt.Jwt;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthenticationResultType;
+
+import java.util.Map;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -26,67 +25,80 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication", description = "Register, login, token refresh and logout")
+@Tag(name = "Authentication", description = "Cognito-backed auth endpoints")
 public class AuthController {
 
-    private final AuthService authService;
-
-    @Operation(summary = "Register a new user account")
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Account created",
-                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Validation error or duplicate email/username",
-                    content = @Content)
-    })
-    @PostMapping("/register")
-    @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        return authService.register(request);
-    }
+    private final CognitoAdminService cognitoAdminService;
 
     @Operation(summary = "Login with email and password")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Login successful",
-                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid credentials",
-                    content = @Content)
-    })
     @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request);
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+        try {
+            AuthenticationResultType result = cognitoAdminService.login(
+                    request.email(), request.password()
+            );
+
+            UserResponse user = cognitoAdminService.getUserInfo(result.accessToken());
+
+            return ResponseEntity.ok(AuthResponse.fromCognito(result, user));
+
+        } catch (PasswordChangeRequiredException ex) {
+            return ResponseEntity.status(428).body(Map.of(
+                    "challenge", "NEW_PASSWORD_REQUIRED",
+                    "session", ex.getSession(),
+                    "message", "Please set a new password"
+            ));
+        }
     }
 
-    @Operation(summary = "Refresh access token using a valid refresh token")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "New access token issued",
-                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Refresh token expired or not found",
-                    content = @Content)
-    })
     @PostMapping("/refresh")
-    public AuthResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
-        return authService.refreshToken(request);
+    public ResponseEntity<AuthResponse> refresh(
+            @Valid @RequestBody RefreshTokenRequest request) {
+        AuthenticationResultType result = cognitoAdminService.refreshToken(
+                request.refreshToken()
+        );
+        UserResponse user = cognitoAdminService.getUserInfo(result.accessToken());
+        return ResponseEntity.ok(AuthResponse.fromCognito(result, user));
     }
 
-    @Operation(summary = "Logout — revoke the current refresh token",
-            security = @SecurityRequirement(name = "bearerAuth"))
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Logged out successfully"),
-            @ApiResponse(responseCode = "401", description = "Not authenticated", content = @Content)
-    })
-    @PostMapping("/logout")
-    public ResponseEntity<MessageResponse> logout(
-            @AuthenticationPrincipal UserDetails userDetails) {
-        authService.logout(userDetails.getUsername());
-        return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
+    @PostMapping("/change-password")
+    public ResponseEntity<AuthResponse> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request) {
+        AuthenticationResultType result = cognitoAdminService.forceChangePassword(
+                request.email(),
+                request.newPassword(),
+                request.session()
+        );
+        UserResponse user = cognitoAdminService.getUserInfo(result.accessToken());
+        return ResponseEntity.ok(AuthResponse.fromCognito(result, user));
     }
 
-    @Operation(summary = "Get current authenticated user info",
-            security = @SecurityRequirement(name = "bearerAuth"))
-    @ApiResponse(responseCode = "200", description = "Current user details")
+    @Operation(summary = "Get current user info from token")
     @GetMapping("/me")
-    public ResponseEntity<UserDetails> me(
-            @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(userDetails);
+    @PreAuthorize("hasAnyRole('ADMIN_GROUP', 'SALES')")
+    public ResponseEntity<MeResponse> me(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(new MeResponse(
+                jwt.getSubject(),
+                jwt.getClaimAsString("email"),
+                jwt.getClaimAsString("name"),
+                jwt.getClaimAsStringList("cognito:groups")
+        ));
+    }
+
+    @Operation(summary = "Admin — create a new internal user")
+    @PostMapping("/users")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<MessageResponse> createUser(
+            @Valid @RequestBody CreateUserRequest request) {
+        cognitoAdminService.createUser(
+                request.email(),
+                request.name(),
+                request.familyName(),
+                request.phoneNumber()
+        );
+        cognitoAdminService.assignGroup(request.email(), request.role());
+        return ResponseEntity.ok(new MessageResponse(
+                "User created. Temporary password sent to " + request.email()
+        ));
     }
 }
