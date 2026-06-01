@@ -11,12 +11,16 @@ import com.migfora.sales.exception.AuthException;
 import com.migfora.sales.repository.CompanyRepository;
 import com.migfora.sales.repository.InvestigationRepository;
 import com.migfora.sales.repository.ReconTaskRepository;
+import com.migfora.sales.runner.ReconTaskDispatcher;
 import com.migfora.sales.validator.ReconDependencyValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -37,7 +41,12 @@ public class InvestigationService {
     private final CompanyRepository companyRepository;
     private final ReconTaskRepository reconTaskRepository;
     private final ReconDependencyValidator dependencyValidator;
+    private final ReconTaskDispatcher dispatcher;
 
+    @Qualifier("reconTaskExecutor")
+    private final TaskExecutor taskExecutor;
+
+    // ── Create investigation session ──────────────────────────────────────────
 
     // ── Create investigation session ──────────────────────────────────────────
 
@@ -55,6 +64,7 @@ public class InvestigationService {
                 .build();
 
         Investigation saved = investigationRepository.save(investigation);
+
         log.info("Investigation session created | id={} domain={} company={} by={}",
                 saved.getId(), saved.getDomain(), company.getId(), triggeredBy);
 
@@ -63,7 +73,7 @@ public class InvestigationService {
 
     // ── Run specific tasks ────────────────────────────────────────────────────
 
-    @Transactional
+    // No @Transactional here — each task saves independently
     public List<ReconTaskResponse> runTasks(Long investigationId,
                                             RunTasksRequest request,
                                             String triggeredBy) {
@@ -73,16 +83,13 @@ public class InvestigationService {
             throw new AuthException("Investigation session is not open.");
         }
 
-        // Get existing tasks to check dependencies
         List<ReconTask> existingTasks = reconTaskRepository
                 .findByInvestigationId(investigationId);
 
-        // Get resolved IP from previous DNS_LOOKUP if exists
         String resolvedIp = investigation.getIpAddress();
 
-        List<ReconTask> results = new java.util.ArrayList<>();
+        List<ReconTaskResponse> results = new java.util.ArrayList<>();
 
-        // DNS_LOOKUP must always be first if requested
         List<ReconTaskType> ordered = new java.util.ArrayList<>(request.tasks());
         ordered.sort((a, b) -> {
             if (a == ReconTaskType.DNS_LOOKUP) return -1;
@@ -91,68 +98,88 @@ public class InvestigationService {
         });
 
         for (ReconTaskType type : ordered) {
+            ReconTaskResponse response = createAndSaveTask(
+                    type, investigation, existingTasks, resolvedIp, triggeredBy
+            );
+            results.add(response);
 
-            // Validate dependency
-            ValidationResult validation =
-                    dependencyValidator.validate(type, existingTasks, resolvedIp);
-
-            ReconTask task = ReconTask.builder()
-                    .type(type)
-                    .investigation(investigation)
-                    .triggeredBy(triggeredBy)
-                    .build();
-
-            if (validation.blocked()) {
-                task.setStatus(ReconTaskStatus.BLOCKED);
-                task.setBlockedReason(validation.message());
-                log.warn("Task blocked | type={} reason={}", type, validation.message());
-
-            } else if (validation.skipped()) {
-                task.setStatus(ReconTaskStatus.SKIPPED);
-                task.setBlockedReason(validation.message());
-                log.warn("Task skipped | type={} reason={}", type, validation.message());
-
-            } else {
-                task.setStatus(ReconTaskStatus.PENDING);
-
-                if (validation.hasCdnWarning()) {
-                    task.setCdnDetected(true);
-                    task.setCdnProvider(validation.cdnProvider());
-                    task.setBlockedReason(validation.message());
-                    log.warn("CDN detected | type={} cdn={} ip={}",
-                            type, validation.cdnProvider(), resolvedIp);
-                }
-            }
-
-            // Replace existing task of same type
-            reconTaskRepository.findByInvestigationIdAndType(investigationId, type)
-                    .ifPresent(reconTaskRepository::delete);
-
-            results.add(reconTaskRepository.save(task));
+            // Refresh existing tasks so next iteration sees current state
+            existingTasks = reconTaskRepository.findByInvestigationId(investigationId);
         }
 
         log.info("Tasks processed | investigationId={} total={} pending={} blocked={} skipped={}",
                 investigationId,
                 results.size(),
-                results.stream().filter(t -> t.getStatus() == ReconTaskStatus.PENDING).count(),
-                results.stream().filter(t -> t.getStatus() == ReconTaskStatus.BLOCKED).count(),
-                results.stream().filter(t -> t.getStatus() == ReconTaskStatus.SKIPPED).count()
+                results.stream().filter(t -> t.status() == ReconTaskStatus.PENDING).count(),
+                results.stream().filter(t -> t.status() == ReconTaskStatus.BLOCKED).count(),
+                results.stream().filter(t -> t.status() == ReconTaskStatus.SKIPPED).count()
         );
 
-        // TODO Phase 3 — dispatch PENDING tasks to SQS
-        // results.stream()
-        //        .filter(t -> t.getStatus() == ReconTaskStatus.PENDING)
-        //        .forEach(t -> sqsService.dispatch(t.getId()));
-
-        return results.stream().map(this::toTaskResponse).collect(Collectors.toList());
+        return results;
     }
+
+    // ── Each task in its own transaction ──────────────────────────────────────
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ReconTaskResponse createAndSaveTask(ReconTaskType type,
+                                               Investigation investigation,
+                                               List<ReconTask> existingTasks,
+                                               String resolvedIp,
+                                               String triggeredBy) {
+        ValidationResult validation = dependencyValidator.validate(
+                type, existingTasks, resolvedIp
+        );
+
+        // Remove old result for this type if re-running
+        reconTaskRepository
+                .findByInvestigationIdAndType(investigation.getId(), type)
+                .ifPresent(reconTaskRepository::delete);
+
+        ReconTask task = ReconTask.builder()
+                .type(type)
+                .investigation(investigation)
+                .triggeredBy(triggeredBy)
+                .build();
+
+        if (validation.isBlocked()) {
+            task.setStatus(ReconTaskStatus.BLOCKED);
+            task.setBlockedReason(validation.message());
+            log.warn("Task blocked | type={} reason={}", type, validation.message());
+
+        } else if (validation.isSkipped()) {
+            task.setStatus(ReconTaskStatus.SKIPPED);
+            task.setBlockedReason(validation.message());
+            log.warn("Task skipped | type={} reason={}", type, validation.message());
+
+        } else {
+            task.setStatus(ReconTaskStatus.PENDING);
+
+            if (validation.hasCdnWarning()) {
+                task.setCdnDetected(true);
+                task.setCdnProvider(validation.cdnProvider());
+                task.setBlockedReason(validation.message());
+                log.warn("CDN warning | type={} cdn={}", type, validation.cdnProvider());
+            }
+        }
+
+        ReconTask saved = reconTaskRepository.save(task);
+
+        // Dispatch PENDING tasks to runner asynchronously
+        if (saved.getStatus() == ReconTaskStatus.PENDING) {
+            Long taskId = saved.getId();
+            taskExecutor.execute(() -> dispatcher.dispatch(taskId));
+            log.info("Task dispatched | id={} type={}", taskId, type);
+        }
+
+        return toTaskResponse(saved);
+    }
+
     // ── Run all tasks ─────────────────────────────────────────────────────────
 
-    @Transactional
     public List<ReconTaskResponse> runAll(Long investigationId,
                                           RunAllTasksRequest request,
                                           String triggeredBy) {
-        List<ReconTask.ReconTaskType> allTasks = new java.util.ArrayList<>(List.of(
+        List<ReconTaskType> allTasks = new java.util.ArrayList<>(List.of(
                 ReconTaskType.DNS_LOOKUP,
                 ReconTaskType.WHOIS,
                 ReconTaskType.TECH_STACK,
@@ -162,14 +189,11 @@ public class InvestigationService {
                 ReconTaskType.HEADERS
         ));
 
-        // Optional external platform tasks
         if (request.includeShogan())  allTasks.add(ReconTaskType.SHODAN);
         if (request.includeCensys())  allTasks.add(ReconTaskType.CENSYS);
         if (request.includeIpInfo())  allTasks.add(ReconTaskType.IP_INFO);
 
-        return runTasks(investigationId,
-                new RunTasksRequest(allTasks),
-                triggeredBy);
+        return runTasks(investigationId, new RunTasksRequest(allTasks), triggeredBy);
     }
 
     // ── Get all investigations ────────────────────────────────────────────────
@@ -186,8 +210,7 @@ public class InvestigationService {
     @Transactional(readOnly = true)
     public InvestigationResponse getById(Long id) {
         Investigation investigation = findById(id);
-        List<ReconTask> tasks = reconTaskRepository
-                .findByInvestigationId(id);
+        List<ReconTask> tasks = reconTaskRepository.findByInvestigationId(id);
         return toFullResponse(investigation, tasks);
     }
 

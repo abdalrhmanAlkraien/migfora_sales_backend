@@ -154,7 +154,7 @@ public class PipelineService {
 
             PipelineTaskResult result;
 
-            if (validation.blocked()) {
+            if (validation.isBlocked()) {
                 // Dependency not met
                 result = new PipelineTaskResult(
                         step.getExecutionOrder(),
@@ -164,6 +164,7 @@ public class PipelineService {
                         validation.message(),
                         null, false
                 );
+
                 saveBlockedTask(step, investigation, triggeredBy, validation.message());
 
                 if (step.isStopOnFailure()) {
@@ -172,7 +173,7 @@ public class PipelineService {
                             step.getTaskType(), validation.message());
                 }
 
-            } else if (validation.skipped()) {
+            } else if (validation.isSkipped()) {
                 // Dependency failed
                 result = new PipelineTaskResult(
                         step.getExecutionOrder(),

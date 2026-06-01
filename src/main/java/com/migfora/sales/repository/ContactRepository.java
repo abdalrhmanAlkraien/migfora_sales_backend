@@ -19,14 +19,26 @@ public interface ContactRepository extends JpaRepository<Contact, Long> {
 
     Page<Contact> findByCompanyId(Long companyId, Pageable pageable);
 
-    @Query("""
-            SELECT c FROM Contact c
-            WHERE c.company.id = :companyId
-            AND (:search IS NULL OR
-                 LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR
-                 LOWER(c.email) LIKE LOWER(CONCAT('%', :search, '%')))
-            """)
+    @Query(value = """
+        SELECT * FROM contacts c
+        WHERE c.company_id = :companyId
+        AND (CAST(:search AS text) IS NULL OR
+             LOWER(CAST(c.name AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+             OR LOWER(CAST(c.email AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+        ORDER BY c.created_at DESC
+        """,
+            countQuery = """
+        SELECT COUNT(*) FROM contacts c
+        WHERE c.company_id = :companyId
+        AND (CAST(:search AS text) IS NULL OR
+             LOWER(CAST(c.name AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+             OR LOWER(CAST(c.email AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+        """,
+            nativeQuery = true)
     Page<Contact> searchByCompany(@Param("companyId") Long companyId,
                                   @Param("search") String search,
                                   Pageable pageable);
+
+    long countByCompanyId(Long companyId);
+
 }

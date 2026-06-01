@@ -1,8 +1,14 @@
 package com.migfora.sales.controller;
 
 import com.migfora.sales.dto.CompanyDtos.*;
+import com.migfora.sales.dto.ContactDtos;
+import com.migfora.sales.dto.InvestigationDtos;
+import com.migfora.sales.dto.ReportDtos;
 import com.migfora.sales.entity.Company;
 import com.migfora.sales.service.CompanyService;
+import com.migfora.sales.service.ContactService;
+import com.migfora.sales.service.InvestigationService;
+import com.migfora.sales.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,6 +35,9 @@ import org.springframework.web.bind.annotation.*;
 public class CompanyController {
 
     private final CompanyService companyService;
+    private final ContactService contactService;
+    private final InvestigationService investigationService;
+    private final ReportService reportService;
 
     @Operation(summary = "Create a new company")
     @PostMapping
@@ -71,5 +80,32 @@ public class CompanyController {
             @PathVariable Long id,
             @AuthenticationPrincipal Jwt jwt) {
         companyService.delete(id, jwt.getSubject());
+    }
+
+    // ── Company nested resources ──────────────────────────────────────────────
+
+    @Operation(summary = "Get investigations for a company")
+    @GetMapping("/{id}/investigations")
+    public Page<InvestigationDtos.InvestigationSummaryResponse> getInvestigations(
+            @PathVariable Long id,
+            @PageableDefault(size = 3) Pageable pageable) {
+        return investigationService.getByCompany(id, pageable);
+    }
+
+    @Operation(summary = "Get contacts for a company")
+    @GetMapping("/{id}/contacts")
+    public Page<ContactDtos.ContactResponse> getContacts(
+            @PathVariable Long id,
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 3) Pageable pageable) {
+        return contactService.getByCompany(id, search, pageable);
+    }
+
+    @Operation(summary = "Get reports for a company")
+    @GetMapping("/{id}/reports")
+    public Page<ReportDtos.ReportResponse> getReports(
+            @PathVariable Long id,
+            @PageableDefault(size = 3) Pageable pageable) {
+        return reportService.getByCompany(id, pageable);
     }
 }

@@ -9,6 +9,7 @@ import com.migfora.sales.repository.ContactRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,8 +50,14 @@ public class ContactService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ContactResponse> getByCompany(Long companyId, String search, Pageable pageable) {
-        return contactRepository.searchByCompany(companyId, search, pageable)
+    public Page<ContactResponse> getByCompany(Long companyId,
+                                              String search,
+                                              Pageable pageable) {
+        Pageable unsorted = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize()
+        );
+        return contactRepository.searchByCompany(companyId, search, unsorted)
                 .map(this::toResponse);
     }
 

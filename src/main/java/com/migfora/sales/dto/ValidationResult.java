@@ -6,9 +6,9 @@ package com.migfora.sales.dto;
  * @Time: 4:19 PM
  */
 public record ValidationResult(
-        boolean allowed,
-        boolean skipped,
-        boolean blocked,
+        boolean isAllowed,
+        boolean isSkipped,
+        boolean isBlocked,
         boolean hasCdnWarning,
         String cdnProvider,
         String message

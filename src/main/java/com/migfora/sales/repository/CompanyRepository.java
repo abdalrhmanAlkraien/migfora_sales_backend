@@ -26,14 +26,25 @@ public interface CompanyRepository extends JpaRepository<Company, Long> {
 
     Page<Company> findByStatus(Company.CompanyStatus status, Pageable pageable);
 
-    @Query("""
-            SELECT c FROM Company c
-            WHERE (:search IS NULL OR
-                   LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR
-                   LOWER(c.domain) LIKE LOWER(CONCAT('%', :search, '%')))
-            AND (:status IS NULL OR c.status = :status)
-            """)
+
+
+    @Query(value = """
+        SELECT * FROM companies c
+        WHERE (CAST(:search AS text) IS NULL OR
+               LOWER(CAST(c.name AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+               OR LOWER(CAST(c.domain AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+        AND (CAST(:status AS text) IS NULL OR CAST(c.status AS text) = CAST(:status AS text))
+        ORDER BY c.created_at DESC
+        """,
+            countQuery = """
+        SELECT COUNT(*) FROM companies c
+        WHERE (CAST(:search AS text) IS NULL OR
+               LOWER(CAST(c.name AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+               OR LOWER(CAST(c.domain AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+        AND (CAST(:status AS text) IS NULL OR CAST(c.status AS text) = CAST(:status AS text))
+        """,
+            nativeQuery = true)
     Page<Company> search(@Param("search") String search,
-                         @Param("status") Company.CompanyStatus status,
+                         @Param("status") String status,
                          Pageable pageable);
 }

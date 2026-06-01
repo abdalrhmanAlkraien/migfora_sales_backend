@@ -5,9 +5,13 @@ import com.migfora.sales.entity.Company;
 import com.migfora.sales.entity.Company.*;
 import com.migfora.sales.exception.AuthException;
 import com.migfora.sales.repository.CompanyRepository;
+import com.migfora.sales.repository.ContactRepository;
+import com.migfora.sales.repository.InvestigationRepository;
+import com.migfora.sales.repository.ReportRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +28,9 @@ public class CompanyService {
 
 
     private final CompanyRepository companyRepository;
+    private final ContactRepository contactRepository;
+    private final InvestigationRepository investigationRepository;
+    private final ReportRepository reportRepository;
 
     @Transactional
     public CompanyResponse create(CreateCompanyRequest request, String createdBy) {
@@ -41,6 +48,7 @@ public class CompanyService {
                 .size(request.size())
                 .notes(request.notes())
                 .createdBy(createdBy)
+                .status(request.status() != null ? request.status() : CompanyStatus.PROSPECT)
                 .build();
 
         Company saved = companyRepository.save(company);
@@ -49,8 +57,19 @@ public class CompanyService {
     }
 
     @Transactional(readOnly = true)
-    public Page<CompanyResponse> getAll(String search, CompanyStatus status, Pageable pageable) {
-        return companyRepository.search(search, status, pageable).map(this::toResponse);
+    public Page<CompanyResponse> getAll(String search,
+                                        CompanyStatus status,
+                                        Pageable pageable) {
+        String statusStr = status != null ? status.name() : null;
+
+        // Strip sort from pageable — our native query handles ORDER BY
+        Pageable unsorted = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize()
+        );
+
+        return companyRepository.search(search, statusStr, unsorted)
+                .map(this::toResponse);
     }
 
     @Transactional(readOnly = true)
@@ -96,6 +115,9 @@ public class CompanyService {
                 c.getIndustry(), c.getCountry(), c.getCity(),
                 c.getWebsite(), c.getSize(), c.getNotes(),
                 c.getCreatedBy(), c.getStatus(),
+                investigationRepository.countByCompanyId(c.getId()),
+                contactRepository.countByCompanyId(c.getId()),
+                reportRepository.countByCompanyId(c.getId()),
                 c.getCreatedAt(), c.getUpdatedAt()
         );
     }

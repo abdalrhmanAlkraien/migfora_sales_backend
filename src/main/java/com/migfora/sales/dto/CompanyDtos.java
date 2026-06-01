@@ -22,7 +22,9 @@ public class CompanyDtos {
             String city,
             String website,
             String size,
-            String notes
+            String notes,
+            CompanyStatus status      // ← optional, defaults to LEAD if null
+
     ) {}
 
     public record UpdateCompanyRequest(
@@ -49,6 +51,9 @@ public class CompanyDtos {
             String notes,
             String createdBy,
             CompanyStatus status,
+            long investigationsCount,
+            long contactsCount,
+            long reportsCount,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {}

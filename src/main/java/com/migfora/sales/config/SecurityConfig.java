@@ -36,16 +36,21 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/v1/auth/login",
             "/api/v1/auth/refresh",
+            "/api/v1/auth/change-password",
             "/actuator/health",
             "/actuator/info",
-            "/v3/api-docs/**",
+            "/api-docs",
+            "/api-docs/**",
+            "/api-docs/swagger-config",
             "/swagger-ui/**",
-            "/swagger-ui.html"
+            "/swagger-ui.html",
+            "/swagger-ui/index.html"
     };
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
+                .securityMatcher("/api/**", "/actuator/**")
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s
@@ -81,7 +86,6 @@ public class SecurityConfig {
                 )
                 .build();
     }
-
     @Bean
     public JwtAuthenticationConverter cognitoJwtConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
