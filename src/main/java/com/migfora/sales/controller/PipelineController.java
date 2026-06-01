@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -50,13 +51,13 @@ public class PipelineController {
         return pipelineService.getById(id);
     }
 
-    @Operation(summary = "Run a pipeline on an investigation")
-    @PostMapping("/run/{investigationId}")
+    @Operation(summary = "Run a saved pipeline on an investigation")
+    @PostMapping("/{pipelineId}/run")
     public PipelineExecutionResponse run(
-            @PathVariable Long investigationId,
+            @PathVariable Long pipelineId,
             @Valid @RequestBody RunPipelineRequest request,
             @AuthenticationPrincipal Jwt jwt) {
-        return pipelineService.run(investigationId, request, jwt.getSubject());
+        return pipelineService.run(request.investigationId(), pipelineId, jwt.getSubject());
     }
 
     @Operation(summary = "Delete pipeline")
@@ -67,5 +68,12 @@ public class PipelineController {
             @PathVariable Long id,
             @AuthenticationPrincipal Jwt jwt) {
         pipelineService.delete(id, jwt.getSubject());
+    }
+
+    @Operation(summary = "Validate pipeline steps before saving")
+    @PostMapping("/validate")
+    public ResponseEntity<PipelineValidationResponse> validate(
+            @Valid @RequestBody CreatePipelineRequest request) {
+        return ResponseEntity.ok(pipelineService.validate(request));
     }
 }

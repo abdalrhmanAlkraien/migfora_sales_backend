@@ -1,15 +1,22 @@
 package com.migfora.sales.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.migfora.sales.dto.InvestigationContextDtos.*;
-import com.migfora.sales.exception.AuthException;
+import com.migfora.sales.dto.InvestigationContextDtos.InvestigationContextResponse;
 import com.migfora.sales.entity.Investigation;
 import com.migfora.sales.entity.InvestigationContext;
+import com.migfora.sales.exception.AuthException;
 import com.migfora.sales.repository.InvestigationContextRepository;
 import com.migfora.sales.repository.InvestigationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -106,11 +113,12 @@ public class InvestigationContextService {
     // ── Write WHOIS data ──────────────────────────────────────────────────────
 
     @Transactional
-    public void writeWhoisData(Long investigationId, String whoisData) {
+    public void writeWhoisData(Long investigationId, String whoisJson) {
         InvestigationContext ctx = getOrCreate(investigationId);
-        ctx.setWhoisData(whoisData);
+        ctx.setWhoisData(whoisJson);
+        ctx.setUpdatedAt(LocalDateTime.now());
         contextRepository.save(ctx);
-        log.info("WHOIS data written | investigationId={}", investigationId);
+        log.info("Context updated — whois | investigationId={}", investigationId);
     }
 
     // ── Write tech stack ──────────────────────────────────────────────────────
@@ -204,21 +212,254 @@ public class InvestigationContextService {
     @Transactional(readOnly = true)
     public InvestigationContextResponse getContext(Long investigationId) {
         InvestigationContext ctx = get(investigationId);
+
         return new InvestigationContextResponse(
                 investigationId,
-                ctx.getResolvedIp(), ctx.getRealIp(),
-                ctx.isCdnDetected(), ctx.getCdnProvider(),
-                ctx.getDnsRecords(), ctx.getNameservers(),
-                ctx.getServerHeader(), ctx.getPoweredByHeader(),
-                ctx.getHttpStatusCode(), ctx.isHttpsRedirect(),
-                ctx.getOpenPorts(), ctx.getExposedServices(),
-                ctx.getSslIssuer(), ctx.getSslExpiry(), ctx.isSslValid(),
-                ctx.getTechStack(), ctx.getSubdomains(), ctx.getWhoisData(),
-                ctx.getTtfb(), ctx.getDnsResolveTime(), ctx.getConnectTime(),
-                ctx.getTlsTime(), ctx.getTotalTime(),
-                ctx.getIpCountry(), ctx.getIpCity(),
-                ctx.getIpOrg(), ctx.getIpAsn(), ctx.getIpHosting(),
+                parseDns(ctx),
+                parseNsLookup(ctx),
+                parseWhois(ctx.getWhoisData()),
+                parseHeaders(ctx),
+                parsePerformance(ctx),
+                parseSsl(ctx),
+                parseTechStack(ctx.getTechStack()),
+                parseSubdomains(ctx.getSubdomains()),
+                parseIpInfo(ctx),
+                parseShodan(ctx.getOpenPorts(), ctx.getExposedServices()),
+                parseCensys(ctx),
                 ctx.getUpdatedAt()
         );
+    }
+
+    // ── DNS ───────────────────────────────────────────────────────────────────────
+
+    private DnsInfo parseDns(InvestigationContext ctx) {
+        if (ctx.getResolvedIp() == null && ctx.getDnsRecords() == null) return null;
+        try {
+            List<String> aRecords = parseJsonArray(ctx.getDnsRecords());
+            List<String> nsRecords = parseJsonArray(ctx.getNameservers());
+            return new DnsInfo(
+                    ctx.getResolvedIp(),
+                    ctx.isCdnDetected(),
+                    ctx.getCdnProvider(),
+                    aRecords,
+                    List.of(),   // MX not stored separately — extend if needed
+                    List.of(),   // TXT not stored separately
+                    nsRecords
+            );
+        } catch (Exception ex) {
+            log.warn("Failed to parse DNS info | error={}", ex.getMessage());
+            return null;
+        }
+    }
+
+// ── NsLookup ──────────────────────────────────────────────────────────────────
+
+    private NsLookupInfo parseNsLookup(InvestigationContext ctx) {
+        if (ctx.getResolvedIp() == null) return null;
+        return new NsLookupInfo(
+                ctx.getResolvedIp(),
+                parseJsonArray(ctx.getNameservers())
+        );
+    }
+
+// ── WHOIS ─────────────────────────────────────────────────────────────────────
+
+    private WhoisInfo parseWhois(String whoisJson) {
+        if (whoisJson == null || whoisJson.isBlank()) return null;
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            JsonNode node = objectMapper.readTree(whoisJson);
+
+            List<String> nameservers = new ArrayList<>();
+            JsonNode nsNode = node.get("nameservers");
+            if (nsNode != null && nsNode.isArray()) {
+                nsNode.forEach(n -> nameservers.add(n.asText()));
+            }
+
+            return new WhoisInfo(
+                    getText(node, "domain"),
+                    getText(node, "ip"),
+                    getText(node, "registrantName"),
+                    getText(node, "registrar"),
+                    getText(node, "status"),
+                    getText(node, "createdDate"),
+                    getText(node, "updatedDate"),
+                    nameservers,
+                    getText(node, "dnssec"),
+                    getText(node, "ipOrg"),
+                    getText(node, "ipCountry"),
+                    getText(node, "ipCity")
+            );
+        } catch (Exception ex) {
+            log.warn("Failed to parse whois JSON | error={}", ex.getMessage());
+            return null;
+        }
+    }
+
+// ── Headers ───────────────────────────────────────────────────────────────────
+
+    private HeadersInfo parseHeaders(InvestigationContext ctx) {
+        if (ctx.getServerHeader() == null && ctx.getHttpStatusCode() == null) return null;
+        return new HeadersInfo(
+                ctx.isHttpsRedirect(),
+                ctx.getHttpStatusCode(),
+                ctx.getServerHeader(),
+                ctx.getPoweredByHeader(),
+                ctx.getXFrameOptions(),
+                ctx.getContentSecurityPolicy(),
+                null,   // add STS field to entity if needed
+                null,   // add Via field to entity if needed
+                null    // add CF-Ray field to entity if needed
+        );
+    }
+
+// ── Performance ───────────────────────────────────────────────────────────────
+
+    private PerformanceInfo parsePerformance(InvestigationContext ctx) {
+        if (ctx.getTtfb() == null) return null;
+
+        String rating;
+        double ttfb = ctx.getTtfb();
+        if (ttfb < 200)       rating = "EXCELLENT";
+        else if (ttfb < 500)  rating = "GOOD";
+        else if (ttfb < 1000) rating = "AVERAGE";
+        else if (ttfb < 2000) rating = "SLOW";
+        else                  rating = "VERY_SLOW";
+
+        return new PerformanceInfo(
+                ctx.getTtfb(),
+                ctx.getDnsResolveTime(),
+                ctx.getConnectTime(),
+                ctx.getTlsTime(),
+                ctx.getTotalTime(),
+                rating
+        );
+    }
+
+// ── SSL ───────────────────────────────────────────────────────────────────────
+
+    private SslInfo parseSsl(InvestigationContext ctx) {
+        if (ctx.getSslIssuer() == null) return null;
+        return new SslInfo(
+                ctx.getSslIssuer(),
+                ctx.getSslExpiry(),
+                ctx.isSslValid(),
+                null
+        );
+    }
+
+// ── Tech Stack ────────────────────────────────────────────────────────────────
+
+    private TechStackInfo parseTechStack(String techJson) {
+        if (techJson == null || techJson.isBlank()) return null;
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            JsonNode node = objectMapper.readTree(techJson);
+
+            List<String> builtWith = parseJsonArray(
+                    node.has("builtWith") ? node.get("builtWith").toString() : null);
+            List<String> wappalyzer = parseJsonArray(
+                    node.has("wappalyzer") ? node.get("wappalyzer").toString() : null);
+
+            JsonNode inferred = node.get("inferredFromHeaders");
+            String webServer = inferred != null ? getText(inferred, "webServer") : null;
+            String language  = inferred != null ? getText(inferred, "language")  : null;
+            String cdn       = inferred != null ? getText(inferred, "cdn")       : null;
+
+            return new TechStackInfo(builtWith, wappalyzer, webServer, language, cdn);
+        } catch (Exception ex) {
+            log.warn("Failed to parse techStack JSON | error={}", ex.getMessage());
+            return null;
+        }
+    }
+
+// ── Subdomains ────────────────────────────────────────────────────────────────
+
+    private SubdomainsInfo parseSubdomains(String subdomainsJson) {
+        if (subdomainsJson == null || subdomainsJson.isBlank()) return null;
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            JsonNode node = objectMapper.readTree(subdomainsJson);
+            if (node.isArray()) {
+                List<String> list = new ArrayList<>();
+                node.forEach(n -> list.add(n.asText()));
+                return new SubdomainsInfo(list.size(), list, null);
+            }
+            List<String> subs = parseJsonArray(
+                    node.has("subdomains") ? node.get("subdomains").toString() : null);
+            return new SubdomainsInfo(
+                    node.has("total") ? node.get("total").asInt() : subs.size(),
+                    subs,
+                    node.has("source") ? node.get("source").asText() : null
+            );
+        } catch (Exception ex) {
+            log.warn("Failed to parse subdomains JSON | error={}", ex.getMessage());
+            return null;
+        }
+    }
+
+// ── IP Info ───────────────────────────────────────────────────────────────────
+
+    private IpInfo parseIpInfo(InvestigationContext ctx) {
+        if (ctx.getIpCountry() == null && ctx.getIpOrg() == null) return null;
+        return new IpInfo(
+                ctx.getResolvedIp(),
+                null,
+                ctx.getIpCity(),
+                null,
+                ctx.getIpCountry(),
+                ctx.getIpOrg(),
+                ctx.getIpAsn(),
+                null
+        );
+    }
+
+// ── Shodan ────────────────────────────────────────────────────────────────────
+
+    private ShodanInfo parseShodan(String openPortsJson, String servicesJson) {
+        if (openPortsJson == null) return null;
+        try {
+            List<Integer> ports = new ArrayList<>();
+            ObjectMapper objectMapper = new ObjectMapper();
+            JsonNode portsNode = objectMapper.readTree(openPortsJson);
+            if (portsNode.isArray()) {
+                portsNode.forEach(n -> ports.add(n.asInt()));
+            }
+            Object services = servicesJson != null
+                    ? objectMapper.readTree(servicesJson) : null;
+            return new ShodanInfo(null, null, null, null, null, ports, services, null);
+        } catch (Exception ex) {
+            log.warn("Failed to parse Shodan data | error={}", ex.getMessage());
+            return null;
+        }
+    }
+
+// ── Censys ────────────────────────────────────────────────────────────────────
+
+    private CensysInfo parseCensys(InvestigationContext ctx) {
+        // Censys data not stored separately yet — extend entity if needed
+        return null;
+    }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private List<String> parseJsonArray(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            JsonNode node = objectMapper.readTree(json);
+            List<String> result = new ArrayList<>();
+            if (node.isArray()) {
+                node.forEach(n -> result.add(n.asText()));
+            }
+            return result;
+        } catch (Exception ex) {
+            return List.of();
+        }
+    }
+
+    private String getText(JsonNode node, String field) {
+        JsonNode val = node.get(field);
+        return val != null && !val.isNull() ? val.asText() : null;
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -106,5 +107,24 @@ public class InvestigationController {
     @GetMapping("/{id}/context")
     public InvestigationContextResponse getContext(@PathVariable Long id) {
         return investigationContextService.getContext(id);
+    }
+
+    @Operation(summary = "Get all available recon task types with dependencies")
+    @GetMapping("/tasks/lookup")
+    public List<ReconTaskLookupResponse> getTaskLookup() {
+        return investigationService.getTaskLookup();
+    }
+
+    @Operation(summary = "Check if a task can run based on current investigation context")
+    @PostMapping("/{id}/tasks/check")
+    public ResponseEntity<TaskReadinessResponse> checkTaskReadiness(
+            @PathVariable Long id,
+            @RequestBody TaskReadinessRequest request) {
+        return ResponseEntity.ok(investigationService.checkTaskReadiness(id, request));
+    }
+
+    @GetMapping("/{id}/tasks")
+    public List<ReconTaskResponse> getAllTasks(@PathVariable Long id) {
+        return investigationService.getAllTasks(id);
     }
 }

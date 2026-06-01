@@ -17,7 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -57,8 +60,8 @@ public class PipelineService {
                 .map(s -> PipelineStep.builder()
                         .executionOrder(s.executionOrder())
                         .taskType(s.taskType())
-                        .stopOnFailure(s.stopOnFailure())
-                        .continueOnCdn(s.continueOnCdn())
+                        .stopOnFailure(s.stopOnFailure() != null ? s.stopOnFailure() : true)
+                        .continueOnCdn(s.continueOnCdn() != null ? s.continueOnCdn() : true)
                         .notes(s.notes())
                         .pipeline(pipeline)
                         .build())
@@ -101,9 +104,8 @@ public class PipelineService {
     // ── Run pipeline on investigation ─────────────────────────────────────────
 
     public PipelineExecutionResponse run(Long investigationId,
-                                         RunPipelineRequest request,
+                                         Long pipelineId,
                                          String triggeredBy) {
-
         Investigation investigation = investigationRepository.findById(investigationId)
                 .orElseThrow(() -> new AuthException("Investigation not found."));
 
@@ -111,7 +113,7 @@ public class PipelineService {
             throw new AuthException("Investigation session is not open.");
         }
 
-        ReconPipeline pipeline = findById(request.pipelineId());
+        ReconPipeline pipeline = findById(pipelineId);
 
         List<PipelineStep> steps = pipeline.getSteps().stream()
                 .sorted(Comparator.comparingInt(PipelineStep::getExecutionOrder))
@@ -167,7 +169,7 @@ public class PipelineService {
 
                 saveBlockedTask(step, investigation, triggeredBy, validation.message());
 
-                if (step.isStopOnFailure()) {
+                if (step.getStopOnFailure()) {
                     pipelineStopped = true;
                     log.warn("Pipeline stopped | step={} reason={}",
                             step.getTaskType(), validation.message());
@@ -185,13 +187,13 @@ public class PipelineService {
                 );
                 saveSkippedTask(step, investigation, triggeredBy, validation.message());
 
-                if (step.isStopOnFailure()) {
+                if (step.getStopOnFailure()) {
                     pipelineStopped = true;
                     log.warn("Pipeline stopped | step={} reason={}",
                             step.getTaskType(), validation.message());
                 }
 
-            } else if (validation.hasCdnWarning() && !step.isContinueOnCdn()) {
+            } else if (validation.hasCdnWarning() && !step.getContinueOnCdn()) {
                 // CDN detected and step is configured to stop on CDN
                 result = new PipelineTaskResult(
                         step.getExecutionOrder(),
@@ -295,6 +297,77 @@ public class PipelineService {
         reconTaskRepository.save(task);
     }
 
+    public PipelineValidationResponse validate(CreatePipelineRequest request) {
+        List<PipelineStepValidationError> errors = new ArrayList<>();
+
+        List<PipelineStepRequest> steps = request.steps().stream()
+                .sorted(Comparator.comparingInt(PipelineStepRequest::executionOrder))
+                .collect(Collectors.toList());
+
+        // Track which tasks appear before the current one
+        Set<ReconTaskType> seenTasks = new LinkedHashSet<>();
+
+        for (PipelineStepRequest step : steps) {
+            ReconTaskType type = step.taskType();
+            ReconTaskType dependency = DEPENDS_ON.get(type);
+
+            if (dependency != null && !seenTasks.contains(dependency)) {
+                errors.add(new PipelineStepValidationError(
+                        step.executionOrder(),
+                        type,
+                        type.name() + " requires " + dependency.name() +
+                                " to run first — add " + dependency.name() +
+                                " before order " + step.executionOrder()
+                ));
+            }
+
+            seenTasks.add(type);
+        }
+
+        // Check duplicate orders
+        Map<Integer, Long> orderCounts = steps.stream()
+                .collect(Collectors.groupingBy(
+                        PipelineStepRequest::executionOrder,
+                        Collectors.counting()
+                ));
+
+        orderCounts.entrySet().stream()
+                .filter(e -> e.getValue() > 1)
+                .forEach(e -> errors.add(new PipelineStepValidationError(
+                        e.getKey(), null,
+                        "Duplicate execution order: " + e.getKey()
+                )));
+
+        // Check duplicate task types
+        Map<ReconTaskType, Long> typeCounts = steps.stream()
+                .collect(Collectors.groupingBy(
+                        PipelineStepRequest::taskType,
+                        Collectors.counting()
+                ));
+
+        typeCounts.entrySet().stream()
+                .filter(e -> e.getValue() > 1)
+                .forEach(e -> errors.add(new PipelineStepValidationError(
+                        -1, e.getKey(),
+                        "Duplicate task type: " + e.getKey().name()
+                )));
+
+        return new PipelineValidationResponse(errors.isEmpty(), errors);
+    }
+
+    // Dependency map — same as ReconDependencyValidator
+    private static final Map<ReconTaskType, ReconTaskType> DEPENDS_ON = Map.of(
+            ReconTaskType.WHOIS,       ReconTaskType.DNS_LOOKUP,
+            ReconTaskType.SHODAN,      ReconTaskType.DNS_LOOKUP,
+            ReconTaskType.CENSYS,      ReconTaskType.DNS_LOOKUP,
+            ReconTaskType.IP_INFO,     ReconTaskType.DNS_LOOKUP,
+            ReconTaskType.TECH_STACK,  ReconTaskType.DNS_LOOKUP,
+            ReconTaskType.SUBDOMAINS,  ReconTaskType.DNS_LOOKUP,
+            ReconTaskType.SSL_CERT,    ReconTaskType.DNS_LOOKUP,
+            ReconTaskType.PERFORMANCE, ReconTaskType.DNS_LOOKUP,
+            ReconTaskType.HEADERS,     ReconTaskType.DNS_LOOKUP
+    );
+
     private void validatePipelineSteps(List<PipelineStepRequest> steps) {
         // Check for duplicate orders
         long distinctOrders = steps.stream()
@@ -338,8 +411,8 @@ public class PipelineService {
                         s.getId(),
                         s.getExecutionOrder(),
                         s.getTaskType(),
-                        s.isStopOnFailure(),
-                        s.isContinueOnCdn(),
+                        s.getStopOnFailure(),
+                        s.getContinueOnCdn(),
                         s.getNotes()
                 ))
                 .collect(Collectors.toList());

@@ -1,9 +1,11 @@
 package com.migfora.sales.runner;
 
+import com.migfora.sales.entity.Investigation;
 import com.migfora.sales.entity.InvestigationContext;
 import com.migfora.sales.entity.ReconTask;
 import com.migfora.sales.entity.ReconTask.ReconTaskStatus;
 import com.migfora.sales.entity.ReconTask.ReconTaskType;
+import com.migfora.sales.repository.InvestigationRepository;
 import com.migfora.sales.repository.ReconTaskRepository;
 import com.migfora.sales.service.InvestigationContextService;
 import lombok.extern.slf4j.Slf4j;
@@ -27,12 +29,16 @@ public class ReconTaskDispatcher {
     private final Map<ReconTaskType, ReconRunner> runners;
     private final ReconTaskRepository reconTaskRepository;
     private final InvestigationContextService contextService;
+    private final InvestigationRepository investigationRepository;
 
     public ReconTaskDispatcher(List<ReconRunner> runnerList,
                                ReconTaskRepository reconTaskRepository,
-                               InvestigationContextService contextService) {
+                               InvestigationContextService contextService,
+                               InvestigationRepository investigationRepository) {
         this.reconTaskRepository = reconTaskRepository;
         this.contextService = contextService;
+        this.investigationRepository = investigationRepository;
+
         // Auto-register all runners by their supported type
         this.runners = runnerList.stream()
                 .collect(Collectors.toMap(ReconRunner::supports,
@@ -46,12 +52,10 @@ public class ReconTaskDispatcher {
 
     public void dispatch(Long taskId) {
         ReconTask task = reconTaskRepository.findById(taskId)
-                .orElseThrow(() -> new RuntimeException(
-                        "Task not found: " + taskId));
+                .orElseThrow(() -> new RuntimeException("Task not found: " + taskId));
 
         if (task.getStatus() != ReconTaskStatus.PENDING) {
-            log.warn("Task not in PENDING state | id={} status={}",
-                    taskId, task.getStatus());
+            log.warn("Task not in PENDING state | id={} status={}", taskId, task.getStatus());
             return;
         }
 
@@ -65,13 +69,19 @@ public class ReconTaskDispatcher {
             return;
         }
 
-        // Load shared context for this investigation session
-        InvestigationContext ctx = contextService
-                .getOrCreate(task.getInvestigation().getId());
+        // ── Fix: load investigation fresh in this thread's session ──────────
+        Investigation investigation = investigationRepository
+                .findById(task.getInvestigation().getId())
+                .orElseThrow(() -> new RuntimeException(
+                        "Investigation not found for task: " + taskId));
+
+        // Replace the lazy proxy with the fully loaded entity
+        task.setInvestigation(investigation);
+
+        InvestigationContext ctx = contextService.getOrCreate(investigation.getId());
 
         log.info("Dispatching task | id={} type={} domain={}",
-                taskId, task.getType(),
-                task.getInvestigation().getDomain());
+                taskId, task.getType(), investigation.getDomain());
 
         try {
             runner.run(task, ctx);

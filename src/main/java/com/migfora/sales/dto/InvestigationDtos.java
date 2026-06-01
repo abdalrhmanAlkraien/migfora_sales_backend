@@ -78,4 +78,27 @@ public class InvestigationDtos {
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {}
+
+    public record ReconTaskLookupResponse(
+            ReconTaskType type,
+            String description,
+            String tool,
+            ReconTaskType dependsOn,       // null means no dependency
+            boolean requiresIp,            // needs IP from DNS_LOOKUP
+            boolean requiresDomain,        // needs domain reachability
+            boolean externalApi            // needs API key
+    ) {}
+
+    public record TaskReadinessRequest(
+            @NotNull ReconTaskType taskType
+    ) {}
+
+    public record TaskReadinessResponse(
+            ReconTaskType taskType,
+            boolean canRun,
+            String reason,
+            boolean cdnWarning,
+            String cdnProvider,
+            String resolvedIp
+    ) {}
 }

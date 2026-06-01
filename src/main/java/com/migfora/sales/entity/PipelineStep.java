@@ -27,11 +27,10 @@ public class PipelineStep {
 
     @Column(nullable = false)
     @Builder.Default
-    private boolean stopOnFailure = true;
+    private Boolean stopOnFailure = true;
 
-    // If CDN detected on this step — should we continue?
     @Builder.Default
-    private boolean continueOnCdn = true;
+    private Boolean continueOnCdn = true;
 
     private String notes;
 

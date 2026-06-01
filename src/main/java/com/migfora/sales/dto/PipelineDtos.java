@@ -30,13 +30,13 @@ public class PipelineDtos {
     public record PipelineStepRequest(
             @NotNull @Min(1) int executionOrder,
             @NotNull ReconTaskType taskType,
-            boolean stopOnFailure,
-            boolean continueOnCdn,
+            Boolean stopOnFailure,    // ← Boolean not boolean
+            Boolean continueOnCdn,   // ← Boolean not boolean
             String notes
     ) {}
 
     public record RunPipelineRequest(
-            @NotNull Long pipelineId
+            @NotNull Long investigationId
     ) {}
 
     // ── Responses ─────────────────────────────────────────────────────────────
@@ -78,5 +78,16 @@ public class PipelineDtos {
             String blockedReason,
             String errorMessage,
             boolean pipelineStopped
+    ) {}
+
+    public record PipelineValidationResponse(
+            boolean valid,
+            List<PipelineStepValidationError> errors
+    ) {}
+
+    public record PipelineStepValidationError(
+            int executionOrder,
+            ReconTaskType taskType,
+            String error
     ) {}
 }

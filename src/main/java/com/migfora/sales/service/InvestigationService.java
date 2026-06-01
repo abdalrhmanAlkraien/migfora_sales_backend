@@ -242,6 +242,85 @@ public class InvestigationService {
         log.info("Investigation deleted | id={} by={}", id, deletedBy);
     }
 
+
+    public List<ReconTaskLookupResponse> getTaskLookup() {
+        return List.of(
+                new ReconTaskLookupResponse(ReconTaskType.DNS_LOOKUP,
+                        "Resolves domain to IP — required first step",
+                        "dig + nslookup", null, false, false, false),
+                new ReconTaskLookupResponse(ReconTaskType.WHOIS,
+                        "WHOIS lookup on domain and resolved IP",
+                        "whois", ReconTaskType.DNS_LOOKUP, true, false, false),
+                new ReconTaskLookupResponse(ReconTaskType.HEADERS,
+                        "HTTP response headers via curl -I",
+                        "curl", ReconTaskType.DNS_LOOKUP, false, true, false),
+                new ReconTaskLookupResponse(ReconTaskType.TECH_STACK,
+                        "Technology stack detection",
+                        "BuiltWith + Wappalyzer", ReconTaskType.DNS_LOOKUP, false, true, false),
+                new ReconTaskLookupResponse(ReconTaskType.SSL_CERT,
+                        "SSL certificate history via crt.sh",
+                        "crt.sh API", ReconTaskType.DNS_LOOKUP, false, true, false),
+                new ReconTaskLookupResponse(ReconTaskType.PERFORMANCE,
+                        "Timing metrics — TTFB, DNS, TLS, total",
+                        "curl timing", ReconTaskType.DNS_LOOKUP, false, true, false),
+                new ReconTaskLookupResponse(ReconTaskType.SUBDOMAINS,
+                        "Subdomain enumeration",
+                        "subfinder + crt.sh", ReconTaskType.DNS_LOOKUP, false, false, false),
+                new ReconTaskLookupResponse(ReconTaskType.IP_INFO,
+                        "IP geolocation, ASN, org info",
+                        "ipinfo.io", ReconTaskType.DNS_LOOKUP, true, false, true),
+                new ReconTaskLookupResponse(ReconTaskType.SHODAN,
+                        "Open ports and exposed services",
+                        "Shodan API", ReconTaskType.DNS_LOOKUP, true, false, true),
+                new ReconTaskLookupResponse(ReconTaskType.CENSYS,
+                        "Port scan and certificate data",
+                        "Censys API", ReconTaskType.DNS_LOOKUP, true, false, true)
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public TaskReadinessResponse checkTaskReadiness(Long investigationId,
+                                                    TaskReadinessRequest request) {
+        Investigation investigation = findById(investigationId);
+        List<ReconTask> existingTasks = reconTaskRepository
+                .findByInvestigationId(investigationId);
+        String resolvedIp = investigation.getIpAddress();
+
+        ValidationResult validation = dependencyValidator.validate(
+                request.taskType(), existingTasks, resolvedIp
+        );
+
+        if (validation.isBlocked()) {
+            return new TaskReadinessResponse(
+                    request.taskType(), false,
+                    validation.message(), false, null, resolvedIp
+            );
+        }
+
+        if (validation.isSkipped()) {
+            return new TaskReadinessResponse(
+                    request.taskType(), false,
+                    validation.message(), false, null, resolvedIp
+            );
+        }
+
+        return new TaskReadinessResponse(
+                request.taskType(), true,
+                validation.hasCdnWarning() ? validation.message() : "Ready to run",
+                validation.hasCdnWarning(),
+                validation.cdnProvider(),
+                resolvedIp
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<ReconTaskResponse> getAllTasks(Long investigationId) {
+        return reconTaskRepository.findByInvestigationId(investigationId)
+                .stream()
+                .map(this::toTaskResponse)
+                .collect(Collectors.toList());
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Investigation findById(Long id) {
