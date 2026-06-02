@@ -84,11 +84,9 @@ public class InvestigationContextDtos {
 
     // ── Tech Stack ────────────────────────────────────────────────────────────
     public record TechStackInfo(
-            List<String> builtWith,
-            List<String> wappalyzer,
-            String webServer,
-            String language,
-            String cdn
+            List<String> detected,
+            Map<String, String> inferred,
+            Map<String, String> sources
     ) {}
 
     // ── Subdomains ────────────────────────────────────────────────────────────

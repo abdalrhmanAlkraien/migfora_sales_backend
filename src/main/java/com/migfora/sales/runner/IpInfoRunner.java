@@ -21,7 +21,8 @@ import java.util.Map;
  * @Date: 31/05/2026
  * @Time: 5:03 PM
  */
-
+@Component
+@Slf4j
 public class IpInfoRunner extends BaseRunner {
 
 
@@ -86,9 +87,11 @@ public class IpInfoRunner extends BaseRunner {
                     task.getInvestigation().getId(),
                     getField(json, "country"),
                     getField(json, "city"),
+                    getField(json, "region"),
                     org,
                     asn,
-                    null
+                    getField(json, "timezone"),
+                    getField(json, "hostname")
             );
 
             markCompleted(task, toJson(result), response.body());

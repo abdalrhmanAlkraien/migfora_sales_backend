@@ -62,8 +62,16 @@ public class InvestigationContext {
     private boolean sslValid;
 
     // ── Tech stack (written by TECH_STACK) ───────────────────────────────────
+
+    // Tech Stack — structured
     @Column(columnDefinition = "TEXT")
-    private String techStack;         // JSON: { framework: "Laravel", cdn: "CF"... }
+    private String techDetected;          // JSON array of detected tech
+
+    @Column(columnDefinition = "TEXT")
+    private String techInferred;          // JSON object of inferred data
+
+    @Column(columnDefinition = "TEXT")
+    private String techSources;           // JSON object of analysis sources
 
     // ── Subdomains (written by SUBDOMAINS) ────────────────────────────────────
     @Column(columnDefinition = "TEXT")
@@ -88,6 +96,9 @@ public class InvestigationContext {
     private String ipOrg;
     private String ipAsn;
     private String ipHosting;
+    private String ipRegion;
+    private String ipTimezone;
+    private String ipHostname;
 
     @LastModifiedDate
     private LocalDateTime updatedAt;

@@ -1,7 +1,5 @@
 package com.migfora.sales.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.migfora.sales.dto.InvestigationContextDtos.*;
 import com.migfora.sales.dto.InvestigationContextDtos.InvestigationContextResponse;
 import com.migfora.sales.entity.Investigation;
@@ -13,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;       // ← Jackson 3.x
+import tools.jackson.databind.ObjectMapper;   // ← Jackson 3.x
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -33,6 +33,7 @@ public class InvestigationContextService {
 
     private final InvestigationContextRepository contextRepository;
     private final InvestigationRepository investigationRepository;
+    private final ObjectMapper objectMapper;
 
     // ── Get or create context ─────────────────────────────────────────────────
 
@@ -126,11 +127,28 @@ public class InvestigationContextService {
     // ── Write tech stack ──────────────────────────────────────────────────────
 
     @Transactional
-    public void writeTechStack(Long investigationId, String techStack) {
+    public void writeTechStack(Long investigationId, String techJson) {
         InvestigationContext ctx = getOrCreate(investigationId);
-        ctx.setTechStack(techStack);
-        contextRepository.save(ctx);
-        log.info("Tech stack written | investigationId={}", investigationId);
+        try {
+            Map<String, Object> data = objectMapper.readValue(techJson, Map.class);
+
+            // Extract each section and store separately
+            Object detected  = data.get("detected");
+            Object inferred  = data.get("inferredFromHeaders");
+            Object sources   = data.get("sources");
+
+            ctx.setTechDetected(detected != null  ? objectMapper.writeValueAsString(detected)  : null);
+            ctx.setTechInferred(inferred != null  ? objectMapper.writeValueAsString(inferred)  : null);
+            ctx.setTechSources(sources != null    ? objectMapper.writeValueAsString(sources)   : null);
+            ctx.setUpdatedAt(LocalDateTime.now());
+            contextRepository.save(ctx);
+            log.info("Tech stack written | investigationId={}", investigationId);
+        } catch (Exception ex) {
+            log.warn("Failed to parse tech stack JSON | error={}", ex.getMessage());
+            ctx.setTechDetected(techJson);
+            ctx.setUpdatedAt(LocalDateTime.now());
+            contextRepository.save(ctx);
+        }
     }
 
     // ── Write open ports ──────────────────────────────────────────────────────
@@ -192,18 +210,22 @@ public class InvestigationContextService {
     public void writeIpInfo(Long investigationId,
                             String country,
                             String city,
+                            String region,
                             String org,
                             String asn,
-                            String hosting) {
+                            String timezone,
+                            String hostname) {
         InvestigationContext ctx = getOrCreate(investigationId);
         ctx.setIpCountry(country);
         ctx.setIpCity(city);
+        ctx.setIpRegion(region);
         ctx.setIpOrg(org);
         ctx.setIpAsn(asn);
-        ctx.setIpHosting(hosting);
+        ctx.setIpTimezone(timezone);
+        ctx.setIpHostname(hostname);
+        ctx.setUpdatedAt(LocalDateTime.now());
         contextRepository.save(ctx);
-        log.info("IP info written | investigationId={} country={} org={}",
-                investigationId, country, org);
+        log.info("Context updated — ipInfo | investigationId={}", investigationId);
     }
 
     // ── Write subdomains ──────────────────────────────────────────────────────
@@ -228,7 +250,7 @@ public class InvestigationContextService {
                 parseHeaders(ctx),
                 parsePerformance(ctx),
                 parseSsl(ctx),
-                parseTechStack(ctx.getTechStack()),
+                parseTechStack(ctx),           // ← pass full ctx, not ctx.getTechStack()
                 parseSubdomains(ctx.getSubdomains()),
                 parseIpInfo(ctx),
                 parseShodan(ctx.getOpenPorts(), ctx.getExposedServices()),
@@ -274,13 +296,12 @@ public class InvestigationContextService {
     private WhoisInfo parseWhois(String whoisJson) {
         if (whoisJson == null || whoisJson.isBlank()) return null;
         try {
-            ObjectMapper objectMapper = new ObjectMapper();
             JsonNode node = objectMapper.readTree(whoisJson);
 
             List<String> nameservers = new ArrayList<>();
             JsonNode nsNode = node.get("nameservers");
             if (nsNode != null && nsNode.isArray()) {
-                nsNode.forEach(n -> nameservers.add(n.asText()));
+                nsNode.forEach(n -> nameservers.add(n.asString()));
             }
 
             return new WhoisInfo(
@@ -311,10 +332,9 @@ public class InvestigationContextService {
         Map<String, String> allHeaders = new LinkedHashMap<>();
         if (ctx.getAllHeaders() != null) {
             try {
-                ObjectMapper objectMapper = new ObjectMapper();
                 JsonNode node = objectMapper.readTree(ctx.getAllHeaders());
-                node.fields().forEachRemaining(e ->
-                        allHeaders.put(e.getKey(), e.getValue().asText()));
+                node.properties().forEach(e ->
+                        allHeaders.put(e.getKey(), e.getValue().asString()));
             } catch (Exception ex) {
                 log.warn("Failed to parse allHeaders JSON | error={}", ex.getMessage());
             }
@@ -393,25 +413,36 @@ public class InvestigationContextService {
 
 // ── Tech Stack ────────────────────────────────────────────────────────────────
 
-    private TechStackInfo parseTechStack(String techJson) {
-        if (techJson == null || techJson.isBlank()) return null;
+    private TechStackInfo parseTechStack(InvestigationContext ctx) {
+        if (ctx.getTechDetected() == null && ctx.getTechInferred() == null) return null;
         try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode node = objectMapper.readTree(techJson);
+            List<String> detected = new ArrayList<>();
+            Map<String, String> inferred = new LinkedHashMap<>();
+            Map<String, String> sources = new LinkedHashMap<>();
 
-            List<String> builtWith = parseJsonArray(
-                    node.has("builtWith") ? node.get("builtWith").toString() : null);
-            List<String> wappalyzer = parseJsonArray(
-                    node.has("wappalyzer") ? node.get("wappalyzer").toString() : null);
+            if (ctx.getTechDetected() != null) {
+                JsonNode node = objectMapper.readTree(ctx.getTechDetected());
+                if (node.isArray()) {
+                    node.forEach(n -> detected.add(n.asString()));
+                }
+            }
 
-            JsonNode inferred = node.get("inferredFromHeaders");
-            String webServer = inferred != null ? getText(inferred, "webServer") : null;
-            String language  = inferred != null ? getText(inferred, "language")  : null;
-            String cdn       = inferred != null ? getText(inferred, "cdn")       : null;
+            if (ctx.getTechInferred() != null) {
+                JsonNode node = objectMapper.readTree(ctx.getTechInferred());
+                node.properties().forEach(e ->
+                        inferred.put(e.getKey(), e.getValue().asString()));
+            }
 
-            return new TechStackInfo(builtWith, wappalyzer, webServer, language, cdn);
+            if (ctx.getTechSources() != null) {
+                JsonNode node = objectMapper.readTree(ctx.getTechSources());
+                node.properties().forEach(e ->
+                        sources.put(e.getKey(), e.getValue().asString()));
+            }
+
+            return new TechStackInfo(detected, inferred, sources);
+
         } catch (Exception ex) {
-            log.warn("Failed to parse techStack JSON | error={}", ex.getMessage());
+            log.warn("Failed to parse tech stack | error={}", ex.getMessage());
             return null;
         }
     }
@@ -421,11 +452,10 @@ public class InvestigationContextService {
     private SubdomainsInfo parseSubdomains(String subdomainsJson) {
         if (subdomainsJson == null || subdomainsJson.isBlank()) return null;
         try {
-            ObjectMapper objectMapper = new ObjectMapper();
             JsonNode node = objectMapper.readTree(subdomainsJson);
             if (node.isArray()) {
                 List<String> list = new ArrayList<>();
-                node.forEach(n -> list.add(n.asText()));
+                node.forEach(n -> list.add(n.asString()));
                 return new SubdomainsInfo(list.size(), list, null);
             }
             List<String> subs = parseJsonArray(
@@ -433,7 +463,7 @@ public class InvestigationContextService {
             return new SubdomainsInfo(
                     node.has("total") ? node.get("total").asInt() : subs.size(),
                     subs,
-                    node.has("source") ? node.get("source").asText() : null
+                    node.has("source") ? node.get("source").asString() : null
             );
         } catch (Exception ex) {
             log.warn("Failed to parse subdomains JSON | error={}", ex.getMessage());
@@ -447,23 +477,21 @@ public class InvestigationContextService {
         if (ctx.getIpCountry() == null && ctx.getIpOrg() == null) return null;
         return new IpInfo(
                 ctx.getResolvedIp(),
-                null,
+                ctx.getIpHostname(),
                 ctx.getIpCity(),
-                null,
+                ctx.getIpRegion(),
                 ctx.getIpCountry(),
                 ctx.getIpOrg(),
                 ctx.getIpAsn(),
-                null
+                ctx.getIpTimezone()
         );
     }
-
 // ── Shodan ────────────────────────────────────────────────────────────────────
 
     private ShodanInfo parseShodan(String openPortsJson, String servicesJson) {
         if (openPortsJson == null) return null;
         try {
             List<Integer> ports = new ArrayList<>();
-            ObjectMapper objectMapper = new ObjectMapper();
             JsonNode portsNode = objectMapper.readTree(openPortsJson);
             if (portsNode.isArray()) {
                 portsNode.forEach(n -> ports.add(n.asInt()));
@@ -489,11 +517,10 @@ public class InvestigationContextService {
     private List<String> parseJsonArray(String json) {
         if (json == null || json.isBlank()) return List.of();
         try {
-            ObjectMapper objectMapper = new ObjectMapper();
             JsonNode node = objectMapper.readTree(json);
             List<String> result = new ArrayList<>();
             if (node.isArray()) {
-                node.forEach(n -> result.add(n.asText()));
+                node.forEach(n -> result.add(n.asString()));
             }
             return result;
         } catch (Exception ex) {
@@ -503,6 +530,6 @@ public class InvestigationContextService {
 
     private String getText(JsonNode node, String field) {
         JsonNode val = node.get(field);
-        return val != null && !val.isNull() ? val.asText() : null;
+        return val != null && !val.isNull() ? val.asString() : null;
     }
 }
