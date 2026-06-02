@@ -16,7 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -96,18 +98,18 @@ public class InvestigationContextService {
     public void writeHeadersData(Long investigationId,
                                  String serverHeader,
                                  String poweredByHeader,
-                                 Integer httpStatus,
-                                 boolean httpsRedirect) {
-
+                                 Integer httpStatusCode,
+                                 boolean httpsRedirect,
+                                 String allHeadersJson) {
         InvestigationContext ctx = getOrCreate(investigationId);
         ctx.setServerHeader(serverHeader);
         ctx.setPoweredByHeader(poweredByHeader);
-        ctx.setHttpStatusCode(httpStatus);
+        ctx.setHttpStatusCode(httpStatusCode);
         ctx.setHttpsRedirect(httpsRedirect);
+        ctx.setAllHeaders(allHeadersJson);
+        ctx.setUpdatedAt(LocalDateTime.now());
         contextRepository.save(ctx);
-
-        log.info("Headers data written | investigationId={} server={}",
-                investigationId, serverHeader);
+        log.info("Context updated — headers | investigationId={}", investigationId);
     }
 
     // ── Write WHOIS data ──────────────────────────────────────────────────────
@@ -155,8 +157,9 @@ public class InvestigationContextService {
         ctx.setSslIssuer(issuer);
         ctx.setSslExpiry(expiry);
         ctx.setSslValid(valid);
+        ctx.setUpdatedAt(LocalDateTime.now());
         contextRepository.save(ctx);
-        log.info("SSL data written | investigationId={}", investigationId);
+        log.info("Context updated — ssl | investigationId={}", investigationId);
     }
 
     // ── Write performance data ────────────────────────────────────────────────
@@ -167,16 +170,20 @@ public class InvestigationContextService {
                                      Double dnsTime,
                                      Double connectTime,
                                      Double tlsTime,
-                                     Double totalTime) {
+                                     Double totalTime,
+                                     Integer httpCode,
+                                     Long sizeBytes) {
         InvestigationContext ctx = getOrCreate(investigationId);
         ctx.setTtfb(ttfb);
         ctx.setDnsResolveTime(dnsTime);
         ctx.setConnectTime(connectTime);
         ctx.setTlsTime(tlsTime);
         ctx.setTotalTime(totalTime);
+        ctx.setPerformanceHttpCode(httpCode);
+        ctx.setPerformanceSizeBytes(sizeBytes);
+        ctx.setUpdatedAt(LocalDateTime.now());
         contextRepository.save(ctx);
-        log.info("Performance data written | investigationId={} ttfb={}ms",
-                investigationId, ttfb);
+        log.info("Context updated — performance | investigationId={}", investigationId);
     }
 
     // ── Write IP info ─────────────────────────────────────────────────────────
@@ -300,6 +307,19 @@ public class InvestigationContextService {
 
     private HeadersInfo parseHeaders(InvestigationContext ctx) {
         if (ctx.getServerHeader() == null && ctx.getHttpStatusCode() == null) return null;
+
+        Map<String, String> allHeaders = new LinkedHashMap<>();
+        if (ctx.getAllHeaders() != null) {
+            try {
+                ObjectMapper objectMapper = new ObjectMapper();
+                JsonNode node = objectMapper.readTree(ctx.getAllHeaders());
+                node.fields().forEachRemaining(e ->
+                        allHeaders.put(e.getKey(), e.getValue().asText()));
+            } catch (Exception ex) {
+                log.warn("Failed to parse allHeaders JSON | error={}", ex.getMessage());
+            }
+        }
+
         return new HeadersInfo(
                 ctx.isHttpsRedirect(),
                 ctx.getHttpStatusCode(),
@@ -307,9 +327,10 @@ public class InvestigationContextService {
                 ctx.getPoweredByHeader(),
                 ctx.getXFrameOptions(),
                 ctx.getContentSecurityPolicy(),
-                null,   // add STS field to entity if needed
-                null,   // add Via field to entity if needed
-                null    // add CF-Ray field to entity if needed
+                null,
+                null,
+                null,
+                allHeaders
         );
     }
 
@@ -318,8 +339,8 @@ public class InvestigationContextService {
     private PerformanceInfo parsePerformance(InvestigationContext ctx) {
         if (ctx.getTtfb() == null) return null;
 
-        String rating;
         double ttfb = ctx.getTtfb();
+        String rating;
         if (ttfb < 200)       rating = "EXCELLENT";
         else if (ttfb < 500)  rating = "GOOD";
         else if (ttfb < 1000) rating = "AVERAGE";
@@ -332,6 +353,8 @@ public class InvestigationContextService {
                 ctx.getConnectTime(),
                 ctx.getTlsTime(),
                 ctx.getTotalTime(),
+                ctx.getPerformanceHttpCode(),
+                ctx.getPerformanceSizeBytes(),
                 rating
         );
     }
@@ -340,11 +363,31 @@ public class InvestigationContextService {
 
     private SslInfo parseSsl(InvestigationContext ctx) {
         if (ctx.getSslIssuer() == null) return null;
+
+        Integer daysUntilExpiry = null;
+        String expiryStatus = "UNKNOWN";
+
+        if (ctx.getSslExpiry() != null) {
+            try {
+                LocalDateTime expiry = LocalDateTime.parse(ctx.getSslExpiry());
+                long days = java.time.Duration.between(
+                        LocalDateTime.now(), expiry).toDays();
+                daysUntilExpiry = (int) days;
+
+                if (days < 0)        expiryStatus = "EXPIRED";
+                else if (days < 30)  expiryStatus = "EXPIRING_SOON";
+                else                 expiryStatus = "VALID";
+            } catch (Exception ex) {
+                log.warn("Failed to parse SSL expiry | error={}", ex.getMessage());
+            }
+        }
+
         return new SslInfo(
                 ctx.getSslIssuer(),
                 ctx.getSslExpiry(),
                 ctx.isSslValid(),
-                null
+                daysUntilExpiry,
+                expiryStatus
         );
     }
 

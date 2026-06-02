@@ -13,6 +13,8 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.*;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.*;
 
 /**
@@ -25,7 +27,11 @@ import java.util.*;
 public class SslCertRunner extends BaseRunner {
 
     private final InvestigationContextService contextService;
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(30))
+            .version(HttpClient.Version.HTTP_1_1)  // force HTTP/1.1 — avoids HTTP/2 issues
+            .build();
 
     public SslCertRunner(ReconTaskRepository reconTaskRepository,
                          InvestigationContextService contextService) {
@@ -45,14 +51,9 @@ public class SslCertRunner extends BaseRunner {
 
         try {
             String encoded = URLEncoder.encode(domain, StandardCharsets.UTF_8);
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://crt.sh/?q=" + encoded + "&output=json"))
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build();
 
-            HttpResponse<String> response = httpClient.send(
-                    request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = fetchWithRetry(
+                    "https://crt.sh/?q=" + encoded + "&output=json", 3);
 
             if (response.statusCode() != 200) {
                 markFailed(task, "crt.sh returned status " + response.statusCode());
@@ -82,11 +83,30 @@ public class SslCertRunner extends BaseRunner {
                 }
             }
 
+            long daysUntilExpiry = 0;
+            String expiryStatus = "UNKNOWN";
+
+            if (latestExpiry != null) {
+                try {
+                    LocalDateTime expiry = LocalDateTime.parse(latestExpiry);
+                    daysUntilExpiry = java.time.Duration.between(
+                            LocalDateTime.now(), expiry).toDays();
+
+                    if (daysUntilExpiry < 0)        expiryStatus = "EXPIRED";
+                    else if (daysUntilExpiry < 30)  expiryStatus = "EXPIRING_SOON";
+                    else                            expiryStatus = "VALID";
+                } catch (Exception ex) {
+                    log.warn("Failed to parse SSL expiry | error={}", ex.getMessage());
+                }
+            }
+
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("totalCertsFound", certs.isArray() ? certs.size() : 0);
-            result.put("latestIssuer",    latestIssuer);
-            result.put("latestExpiry",    latestExpiry);
-            result.put("recentCerts",     certList);
+            result.put("totalCertsFound",  certs.isArray() ? certs.size() : 0);
+            result.put("latestIssuer",     latestIssuer);
+            result.put("latestExpiry",     latestExpiry);
+            result.put("valid",            daysUntilExpiry >= 0);
+            result.put("daysUntilExpiry",  daysUntilExpiry);
+            result.put("expiryStatus",     expiryStatus);
 
             contextService.writeSslData(
                     task.getInvestigation().getId(),
@@ -100,6 +120,37 @@ public class SslCertRunner extends BaseRunner {
         } catch (Exception ex) {
             markFailed(task, "crt.sh request failed: " + ex.getMessage());
         }
+    }
+
+    private HttpResponse<String> fetchWithRetry(String url, int maxRetries)
+            throws Exception {
+        int attempt = 0;
+        while (attempt < maxRetries) {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "Mozilla/5.0")
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) return response;
+
+            if (response.statusCode() == 502
+                    || response.statusCode() == 503
+                    || response.statusCode() == 504) {
+                attempt++;
+                log.warn("crt.sh returned {} — retrying {}/{} | waiting 5s",
+                        response.statusCode(), attempt, maxRetries);
+                Thread.sleep(5000);
+            } else {
+                return response;
+            }
+        }
+        throw new RuntimeException("crt.sh failed after " + maxRetries + " retries");
     }
 
     private String getField(JsonNode node, String field) {

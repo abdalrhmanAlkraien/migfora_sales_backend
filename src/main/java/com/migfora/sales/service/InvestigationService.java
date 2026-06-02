@@ -1,5 +1,6 @@
 package com.migfora.sales.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.migfora.sales.dto.InvestigationDtos.*;
 import com.migfora.sales.dto.ValidationResult;
 import com.migfora.sales.entity.Company;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -331,10 +333,31 @@ public class InvestigationService {
     private ReconTaskResponse toTaskResponse(ReconTask t) {
         return new ReconTaskResponse(
                 t.getId(), t.getType(), t.getStatus(),
-                t.getResult(), t.getRawOutput(),
+                parseAsMap(t.getResult()),      // result is always a JSON object
+//                parseAsAny(t.getRawOutput()),   // rawOutput can be array, object, or plain text
                 t.getErrorMessage(), t.getTriggeredBy(),
                 t.getCreatedAt(), t.getStartedAt(), t.getCompletedAt()
         );
+    }
+
+    // For result field — always a JSON object (Map)
+    private Object parseAsMap(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return new ObjectMapper().readValue(json, Map.class);
+        } catch (Exception ex) {
+            return json;
+        }
+    }
+
+    // For rawOutput — can be array, object, or plain text
+    private Object parseAsAny(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return new ObjectMapper().readValue(json, Object.class);
+        } catch (Exception ex) {
+            return json; // plain text like dig/whois output stays as string
+        }
     }
 
     private InvestigationSummaryResponse toSummaryResponse(Investigation i) {

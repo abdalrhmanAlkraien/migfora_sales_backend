@@ -46,6 +46,8 @@ public class InvestigationContext {
     private String contentSecurityPolicy;
     private Integer httpStatusCode;
     private boolean httpsRedirect;
+    @Column(columnDefinition = "TEXT")
+    private String allHeaders;
 
     // ── Network data (written by SHODAN/CENSYS) ───────────────────────────────
     @Column(columnDefinition = "TEXT")
@@ -77,6 +79,8 @@ public class InvestigationContext {
     private Double connectTime;
     private Double tlsTime;
     private Double totalTime;
+    private Integer performanceHttpCode;
+    private Long performanceSizeBytes;
 
     // ── IP Info (written by IP_INFO) ──────────────────────────────────────────
     private String ipCountry;

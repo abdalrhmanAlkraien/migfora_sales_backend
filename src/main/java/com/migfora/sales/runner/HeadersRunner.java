@@ -72,7 +72,8 @@ public class HeadersRunner extends BaseRunner {
                     (String) result.get("server"),
                     (String) result.get("xPoweredBy"),
                     (Integer) result.get("httpStatusCode"),
-                    httpsWorks
+                    (Boolean) result.get("httpsAvailable"),
+                    toJson(result.get("allHeaders"))
             );
 
             markCompleted(task, toJson(result), rawHeaders);

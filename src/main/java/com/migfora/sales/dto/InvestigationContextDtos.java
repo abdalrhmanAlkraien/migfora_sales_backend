@@ -4,6 +4,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -56,7 +57,8 @@ public class InvestigationContextDtos {
             String contentSecurityPolicy,
             String strictTransportSecurity,
             String via,
-            String cfRay
+            String cfRay,
+            Map<String, String> allHeaders
     ) {}
 
     // ── Performance ───────────────────────────────────────────────────────────
@@ -66,6 +68,8 @@ public class InvestigationContextDtos {
             Double connectMs,
             Double tlsMs,
             Double totalMs,
+            Integer httpCode,      // ← add
+            Long sizeBytes,        // ← add
             String rating
     ) {}
 
@@ -74,7 +78,8 @@ public class InvestigationContextDtos {
             String issuer,
             String expiry,
             boolean valid,
-            Integer totalCertsFound
+            Integer daysUntilExpiry,
+            String expiryStatus       // VALID | EXPIRING_SOON | EXPIRED
     ) {}
 
     // ── Tech Stack ────────────────────────────────────────────────────────────

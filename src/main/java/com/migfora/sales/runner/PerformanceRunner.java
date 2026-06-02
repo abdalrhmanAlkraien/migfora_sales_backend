@@ -69,6 +69,12 @@ public class PerformanceRunner extends BaseRunner {
             Double tlsTime     = toMs(metrics.get("time_appconnect"));
             Double totalTime   = toMs(metrics.get("time_total"));
 
+            Double httpCodeDouble = metrics.get("http_code");
+            Double sizeBytesDouble = metrics.get("size_download");
+
+            Integer httpCode = httpCodeDouble != null ? httpCodeDouble.intValue() : null;
+            Long sizeBytes   = sizeBytesDouble != null ? sizeBytesDouble.longValue() : null;
+
             Map<String, Object> structured = new LinkedHashMap<>();
             structured.put("ttfb_ms",        ttfb);
             structured.put("dns_ms",         dnsTime);
@@ -81,7 +87,8 @@ public class PerformanceRunner extends BaseRunner {
 
             contextService.writePerformanceData(
                     task.getInvestigation().getId(),
-                    ttfb, dnsTime, connectTime, tlsTime, totalTime
+                    ttfb, dnsTime, connectTime, tlsTime, totalTime,
+                    httpCode, sizeBytes
             );
 
             markCompleted(task, toJson(structured), result.output());
