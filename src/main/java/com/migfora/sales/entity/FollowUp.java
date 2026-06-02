@@ -10,36 +10,40 @@ import java.time.LocalDateTime;
 
 /**
  * @author: Abd-alrhman Alkraien.
- * @Date: 31/05/2026
- * @Time: 3:21 PM
+ * @Date: 02/06/2026
+ * @Time: 12:15 AM
  */
+
 @Entity
-@Table(name = "contacts")
+@Table(name = "follow_ups")
 @EntityListeners(AuditingEntityListener.class)
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class Contact {
+public class FollowUp {
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String name;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "contact_id")
+    private Contact contact;
 
-    private String title;
-    private String email;
-    private String phone;
-    private String linkedIn;
-    private String notes;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private FollowUpType type;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    private ContactStatus status = ContactStatus.NEW;
+    private FollowUpStatus status = FollowUpStatus.SCHEDULED;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "company_id")
-    private Company company;
+    @Column(nullable = false)
+    private LocalDateTime scheduledAt;
 
+    private LocalDateTime completedAt;
+
+    private String notes;
+    private String outcome;
     private String createdBy;
 
     @CreatedDate
@@ -49,18 +53,17 @@ public class Contact {
     @LastModifiedDate
     private LocalDateTime updatedAt;
 
-    private LocalDateTime nextFollowUpAt;
-    private LocalDateTime lastFollowUpAt;
+    public enum FollowUpType {
+        CALL,
+        VISIT,
+        MEETING,
+        EMAIL,
+        WHATSAPP
+    }
 
-    public enum ContactStatus {
-        NEW,
-        CONTACTED,
-        INTERESTED,
-        MEETING_SET,
-        PROPOSAL_SENT,
-        NEGOTIATING,
-        WON,
-        LOST,
-        ON_HOLD
+    public enum FollowUpStatus {
+        SCHEDULED,
+        DONE,
+        MISSED
     }
 }
