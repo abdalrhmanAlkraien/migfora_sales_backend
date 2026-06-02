@@ -89,6 +89,7 @@ public class CognitoAdminService {
         }
     }
 
+
     public UserResponse getUserInfo(String accessToken) {
         try {
             // Get user attributes using the access token
@@ -238,5 +239,55 @@ public class CognitoAdminService {
                         .build()
         );
     }
+
+    // ── Admin: Get User by Sub (for internal use — no access token needed) ────────
+
+    public UserInfoResult getUserBySub(String userSub) {
+        try {
+            // Filter users by sub attribute using admin credentials
+            ListUsersResponse response = cognitoClient.listUsers(
+                    ListUsersRequest.builder()
+                            .userPoolId(userPoolId)
+                            .filter("sub = \"" + userSub + "\"")
+                            .limit(1)
+                            .build()
+            );
+
+            if (response.users().isEmpty()) {
+                log.error("User not found in Cognito | sub={}", userSub);
+                throw new AuthException("User not found.");
+            }
+
+            UserType user = response.users().get(0);
+
+            Map<String, String> attrs = user.attributes().stream()
+                    .collect(Collectors.toMap(
+                            AttributeType::name,
+                            AttributeType::value
+                    ));
+
+            return new UserInfoResult(
+                    attrs.get("sub"),
+                    attrs.get("email"),
+                    attrs.get("name"),
+                    attrs.get("family_name"),
+                    attrs.get("phone_number")
+            );
+
+        } catch (AuthException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Failed to get user by sub | sub={} error={}", userSub, ex.getMessage());
+            throw new AuthException("Failed to retrieve user information.");
+        }
+    }
+
+    public record UserInfoResult(
+            String sub,
+            String email,
+            String name,
+            String familyName,
+            String phoneNumber
+    ) {}
 
 }

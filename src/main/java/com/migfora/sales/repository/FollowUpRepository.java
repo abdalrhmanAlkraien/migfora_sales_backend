@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -37,4 +39,18 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, Long> {
 
     Optional<FollowUp> findFirstByContactIdAndStatusOrderByScheduledAtDesc(
             Long contactId, FollowUpStatus status);
+
+    @Query("""
+            SELECT f FROM FollowUp f
+            JOIN FETCH f.contact c
+            JOIN FETCH c.company
+            WHERE f.status = 'SCHEDULED'
+            AND f.scheduledAt >= :startOfDay
+            AND f.scheduledAt <= :endOfDay
+            ORDER BY f.scheduledAt ASC
+            """)
+    List<FollowUp> findTodayFollowUps(
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay
+    );
 }

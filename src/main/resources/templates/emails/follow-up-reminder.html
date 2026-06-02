@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            direction: rtl;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .header {
+            background-color: #0a1628;
+            padding: 24px 32px;
+            display: flex;
+            align-items: center;
+        }
+        .header h1 {
+            color: #FF9900;
+            margin: 0;
+            font-size: 22px;
+        }
+        .header p {
+            color: #ffffff;
+            margin: 4px 0 0;
+            font-size: 14px;
+        }
+        .body {
+            padding: 32px;
+        }
+        .greeting {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 24px;
+        }
+        .follow-up-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            border-right: 4px solid #FF9900;
+        }
+        .follow-up-card .time {
+            font-size: 13px;
+            color: #FF9900;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        .follow-up-card .contact {
+            font-size: 16px;
+            font-weight: bold;
+            color: #0a1628;
+            margin-bottom: 4px;
+        }
+        .follow-up-card .company {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .follow-up-card .type-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            background-color: #e8f0fe;
+            color: #0a1628;
+        }
+        .follow-up-card .notes {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #555;
+            font-style: italic;
+        }
+        .empty {
+            text-align: center;
+            color: #999;
+            padding: 40px 0;
+            font-size: 15px;
+        }
+        .footer {
+            background-color: #f8fafc;
+            padding: 16px 32px;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            border-top: 1px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- Header -->
+    <div class="header">
+        <div>
+            <h1>MIGFORA</h1>
+            <p>Sales Intelligence Platform</p>
+        </div>
+    </div>
+
+    <!-- Body -->
+    <div class="body">
+        <p class="greeting">صباح الخير، <strong th:text="${userName}">Sales User</strong> 👋</p>
+        <p class="subtitle">
+            لديك <strong th:text="${followUps.size()}">0</strong>
+            متابعة مجدولة اليوم —
+            <span th:text="${today}">Monday, June 2</span>
+        </p>
+
+        <!-- Follow-up cards -->
+        <div th:if="${!followUps.isEmpty()}">
+            <div th:each="f : ${followUps}" class="follow-up-card">
+                <div class="time" th:text="${f.time}">09:00 AM</div>
+                <div class="contact" th:text="${f.contactName}">Ahmed Al-Rashidi</div>
+                <div class="company" th:text="${f.companyName}">Tade SA</div>
+                <span class="type-badge" th:text="${f.type}">CALL</span>
+                <div class="notes" th:if="${f.notes != null}" th:text="${f.notes}">notes here</div>
+            </div>
+        </div>
+
+        <div th:if="${followUps.isEmpty()}" class="empty">
+            🎉 لا توجد متابعات مجدولة اليوم
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        MIGFORA Sales Platform — هذا البريد تلقائي، لا تحتاج للرد عليه
+    </div>
+</div>
+</body>
+</html>
