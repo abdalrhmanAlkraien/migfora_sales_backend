@@ -1,9 +1,13 @@
 package com.migfora.sales.controller;
 
+import com.migfora.sales.dto.AuthDtos;
+import com.migfora.sales.dto.UserDtos;
 import com.migfora.sales.dto.UserDtos.*;
+import com.migfora.sales.service.CognitoAdminService;
 import com.migfora.sales.service.UserManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +30,24 @@ public class UserController {
 
 
     private final UserManagementService userManagementService;
+    private final CognitoAdminService cognitoAdminService;
+
+    @Operation(summary = "Admin — create a new internal user")
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN_GROUP')")
+    public ResponseEntity<AuthDtos.MessageResponse> createUser(
+            @Valid @RequestBody UserDtos.CreateUserRequest request) {
+        userManagementService.createUser(
+                request.email(),
+                request.name(),
+                request.familyName(),
+                request.phoneNumber()
+        );
+        cognitoAdminService.assignGroup(request.email(), request.role());
+        return ResponseEntity.ok(new AuthDtos.MessageResponse(
+                "User created. Temporary password sent to " + request.email()
+        ));
+    }
 
     @Operation(summary = "Get all users")
     @GetMapping
@@ -74,6 +96,7 @@ public class UserController {
 
     @Operation(summary = "Reset user password — sends temp password to email")
     @PostMapping("/{sub}/reset-password")
+    @PreAuthorize("hasAnyRole('ADMIN_GROUP', 'SALES')")
     public ResponseEntity<MessageResponse> resetPassword(
             @PathVariable String sub,
             @AuthenticationPrincipal Jwt jwt) {

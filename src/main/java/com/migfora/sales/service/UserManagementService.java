@@ -32,6 +32,31 @@ public class UserManagementService {
     @Value("${aws.cognito.user-pool-id}")
     private String userPoolId;
 
+    // ── Admin: Create User ────────────────────────────────────────────────────
+
+    public void createUser(String email, String name,
+                           String familyName, String phoneNumber) {
+        try {
+            cognitoClient.adminCreateUser(
+                    AdminCreateUserRequest.builder()
+                            .userPoolId(userPoolId)
+                            .username(email)
+                            .userAttributes(
+                                    AttributeType.builder().name("email").value(email).build(),
+                                    AttributeType.builder().name("name").value(name).build(),
+                                    AttributeType.builder().name("family_name").value(familyName).build(),
+                                    AttributeType.builder().name("phone_number").value(phoneNumber).build(),
+                                    AttributeType.builder().name("email_verified").value("true").build()
+                            )
+                            .desiredDeliveryMediums(DeliveryMediumType.EMAIL)
+                            .build()
+            );
+            log.info("Cognito user created | email={}", email);
+        } catch (UsernameExistsException ex) {
+            throw new AuthException("A user with this email already exists.");
+        }
+    }
+
     // ── Get all users ─────────────────────────────────────────────────────────
 
     public UserListResponse getAllUsers(String paginationToken, int limit) {

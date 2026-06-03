@@ -84,21 +84,4 @@ public class AuthController {
                 jwt.getClaimAsStringList("cognito:groups")
         ));
     }
-
-    @Operation(summary = "Admin — create a new internal user")
-    @PostMapping("/users")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<MessageResponse> createUser(
-            @Valid @RequestBody CreateUserRequest request) {
-        cognitoAdminService.createUser(
-                request.email(),
-                request.name(),
-                request.familyName(),
-                request.phoneNumber()
-        );
-        cognitoAdminService.assignGroup(request.email(), request.role());
-        return ResponseEntity.ok(new MessageResponse(
-                "User created. Temporary password sent to " + request.email()
-        ));
-    }
 }

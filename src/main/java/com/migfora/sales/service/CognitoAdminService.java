@@ -1,6 +1,6 @@
 package com.migfora.sales.service;
 
-import com.migfora.sales.dto.AuthDtos.*;
+import com.migfora.sales.dto.AuthDtos.UserResponse;
 import com.migfora.sales.exception.AuthException;
 import com.migfora.sales.exception.PasswordChangeRequiredException;
 import lombok.RequiredArgsConstructor;
@@ -8,7 +8,31 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
-import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminDisableUserRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserResponse;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminListGroupsForUserRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeType;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthFlowType;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthenticationResultType;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ChallengeNameType;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ExpiredCodeException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.GetUserRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.GetUserResponse;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.GroupType;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.InitiateAuthRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.InitiateAuthResponse;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.InvalidPasswordException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersResponse;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.NotAuthorizedException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.RespondToAuthChallengeRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.RespondToAuthChallengeResponse;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.TooManyRequestsException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotConfirmedException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.UserNotFoundException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.UserType;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -179,31 +203,6 @@ public class CognitoAdminService {
         }
     }
 
-    // ── Admin: Create User ────────────────────────────────────────────────────
-
-    public void createUser(String email, String name,
-                           String familyName, String phoneNumber) {
-        try {
-            cognitoClient.adminCreateUser(
-                    AdminCreateUserRequest.builder()
-                            .userPoolId(userPoolId)
-                            .username(email)
-                            .userAttributes(
-                                    AttributeType.builder().name("email").value(email).build(),
-                                    AttributeType.builder().name("name").value(name).build(),
-                                    AttributeType.builder().name("family_name").value(familyName).build(),
-                                    AttributeType.builder().name("phone_number").value(phoneNumber).build(),
-                                    AttributeType.builder().name("email_verified").value("true").build()
-                            )
-                            .desiredDeliveryMediums(DeliveryMediumType.EMAIL)
-                            .build()
-            );
-            log.info("Cognito user created | email={}", email);
-        } catch (UsernameExistsException ex) {
-            throw new AuthException("A user with this email already exists.");
-        }
-    }
-
     // ── Admin: Assign Group ───────────────────────────────────────────────────
 
     public void assignGroup(String email, String groupName) {
@@ -288,6 +287,7 @@ public class CognitoAdminService {
             String name,
             String familyName,
             String phoneNumber
-    ) {}
+    ) {
+    }
 
 }

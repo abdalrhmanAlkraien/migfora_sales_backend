@@ -1,5 +1,6 @@
 package com.migfora.sales.dto;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 
@@ -14,7 +15,28 @@ import java.util.List;
 public class UserDtos {
 
 
-    private UserDtos() {}
+    private UserDtos() {
+    }
+
+    public record CreateUserRequest(
+            @NotBlank @Email
+            String email,
+
+            @NotBlank
+            String name,
+
+            @NotBlank
+            String familyName,
+
+            @NotBlank
+            @Pattern(regexp = "^\\+[1-9]\\d{6,14}$",
+                    message = "Phone must be in E.164 format e.g. +962791234567")
+            String phoneNumber,
+
+            @NotBlank
+            String role   // admin_group | sales
+    ) {
+    }
 
     // ── Requests ──────────────────────────────────────────────────────────────
 
@@ -27,7 +49,8 @@ public class UserDtos {
                     message = "Phone must be E.164 format e.g. +962791234567"
             )
             String phoneNumber
-    ) {}
+    ) {
+    }
 
     // ── Responses ─────────────────────────────────────────────────────────────
 
@@ -45,13 +68,16 @@ public class UserDtos {
             boolean isAdmin,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
-    ) {}
+    ) {
+    }
 
     public record UserListResponse(
             List<UserDetailResponse> users,
             String nextToken,
             int total
-    ) {}
+    ) {
+    }
 
-    public record MessageResponse(String message) {}
+    public record MessageResponse(String message) {
+    }
 }
