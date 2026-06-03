@@ -27,9 +27,12 @@ public class InvestigationContext {
     @JoinColumn(name = "investigation_id")
     private Investigation investigation;
 
+    private String realIp;
+
     // ── DNS data (written by DNS_LOOKUP) ──────────────────────────────────────
+    @Column(columnDefinition = "TEXT")
+    private String dnsHistory;           // JSON array of full IP history
     private String resolvedIp;
-    private String realIp;            // if CDN bypass found
     private boolean cdnDetected;
     private String cdnProvider;
 
@@ -77,6 +80,10 @@ public class InvestigationContext {
     @Column(columnDefinition = "TEXT")
     private String subdomains;        // JSON array
 
+    // ── Subdomains scan (written by SUBDOMAINS scan) ────────────────────────────────────
+    @Column(columnDefinition = "TEXT")
+    private String subdomainScanData;    // JSON: detailed per-subdomain intel
+
     // ── WHOIS data (written by WHOIS) ─────────────────────────────────────────
     @Column(columnDefinition = "TEXT")
     private String whoisData;         // JSON
@@ -99,6 +106,20 @@ public class InvestigationContext {
     private String ipRegion;
     private String ipTimezone;
     private String ipHostname;
+
+    // ── DNS History (written by DNS_HISTORY) ──────────────────────────────────
+    @Column(columnDefinition = "TEXT")
+    private String nonCdnIps;            // JSON array of non-CDN IPs
+
+    // ── Direct IP Scan (written by DIRECT_IP_SCAN) ────────────────────────────
+    @Column(columnDefinition = "TEXT")
+    private String directScanFindings;   // JSON: full findings from direct scan
+
+    private String realServer;           // real web server bypassing CDN
+    private String realPoweredBy;        // real X-Powered-By bypassing CDN
+    private String realRuntime;          // PHP-FPM, Gunicorn, etc.
+    private boolean loadBalanced;
+    private String orchestration;        // None / Kubernetes / ECS
 
     @LastModifiedDate
     private LocalDateTime updatedAt;

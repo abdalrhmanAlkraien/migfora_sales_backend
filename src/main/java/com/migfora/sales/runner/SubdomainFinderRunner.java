@@ -18,13 +18,13 @@ import java.util.*;
 
 @Component
 @Slf4j
-public class SubdomainsRunner extends BaseRunner {
+public class SubdomainFinderRunner extends BaseRunner {
 
 
     private final InvestigationContextService contextService;
 
-    public SubdomainsRunner(ReconTaskRepository reconTaskRepository,
-                            InvestigationContextService contextService) {
+    public SubdomainFinderRunner(ReconTaskRepository reconTaskRepository,
+                                 InvestigationContextService contextService) {
         super(reconTaskRepository);
         this.contextService = contextService;
     }

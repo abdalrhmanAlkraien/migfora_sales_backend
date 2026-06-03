@@ -276,7 +276,16 @@ public class InvestigationService {
                         "Shodan API", ReconTaskType.DNS_LOOKUP, true, false, true),
                 new ReconTaskLookupResponse(ReconTaskType.CENSYS,
                         "Port scan and certificate data",
-                        "Censys API", ReconTaskType.DNS_LOOKUP, true, false, true)
+                        "Censys API", ReconTaskType.DNS_LOOKUP, true, false, true),
+                new ReconTaskLookupResponse(ReconTaskType.DNS_HISTORY,
+                        "IP history — finds real origin IP behind Cloudflare/CDN",
+                        "HackerTarget + ViewDNS", ReconTaskType.DNS_LOOKUP, false, false, false),
+                new ReconTaskLookupResponse(ReconTaskType.DIRECT_IP_SCAN,
+                        "Scan origin IP directly — bypasses CDN to get real server headers",
+                        "curl with Host header", ReconTaskType.DNS_HISTORY, true, false, false),
+                new ReconTaskLookupResponse(ReconTaskType.SUBDOMAIN_SCAN,
+                        "Scan subdomains — bypasses CDN to get real server for all the subdomains",
+                        "curl with Host header", ReconTaskType.SUBDOMAINS, true, false, false)
         );
     }
 

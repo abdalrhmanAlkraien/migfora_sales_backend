@@ -2,6 +2,8 @@ package com.migfora.sales.service;
 
 import com.migfora.sales.dto.InvestigationContextDtos.*;
 import com.migfora.sales.dto.InvestigationContextDtos.InvestigationContextResponse;
+import com.migfora.sales.dto.InvestigationDtos;
+import com.migfora.sales.dto.InvestigationDtos.*;
 import com.migfora.sales.entity.Investigation;
 import com.migfora.sales.entity.InvestigationContext;
 import com.migfora.sales.exception.AuthException;
@@ -238,6 +240,97 @@ public class InvestigationContextService {
         log.info("Subdomains written | investigationId={}", investigationId);
     }
 
+    // ── Write subdomains_scan ──────────────────────────────────────────────────────
+
+    @Transactional
+    public void writeSubdomainScanData(Long investigationId, String scanJson) {
+        InvestigationContext ctx = getOrCreate(investigationId);
+        ctx.setSubdomainScanData(scanJson);
+        ctx.setUpdatedAt(LocalDateTime.now());
+        contextRepository.save(ctx);
+        log.info("Subdomain scan written | investigationId={}", investigationId);
+    }
+
+    private SubdomainScanInfo parseSubdomainScan(InvestigationContext ctx) {
+        if (ctx.getSubdomainScanData() == null) return null;
+        try {
+            tools.jackson.databind.JsonNode root =
+                    objectMapper.readTree(ctx.getSubdomainScanData());
+
+            int totalScanned = root.path("totalScanned").asInt(0);
+            int flaggedCount = root.path("flaggedCount").asInt(0);
+
+            List<InvestigationDtos.SubdomainDetail> flagged    = parseSubdomainDetails(root.get("flagged"));
+            List<SubdomainDetail> subdomains = parseSubdomainDetails(root.get("subdomains"));
+
+            return new SubdomainScanInfo(totalScanned, flaggedCount, flagged, subdomains);
+
+        } catch (Exception ex) {
+            log.warn("Failed to parse subdomainScan | error={}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private List<SubdomainDetail> parseSubdomainDetails(
+            tools.jackson.databind.JsonNode array) {
+        List<SubdomainDetail> list = new ArrayList<>();
+        if (array == null || !array.isArray()) return list;
+
+        for (JsonNode node : array) {
+            // Parse flags array
+            List<String> flags = new ArrayList<>();
+            JsonNode flagsNode = node.get("flags");
+            if (flagsNode != null && flagsNode.isArray()) {
+                flagsNode.forEach(f -> flags.add(f.asText()));
+            }
+
+            list.add(new SubdomainDetail(
+                    node.path("subdomain").asText(null),
+                    node.path("type").asText(null),
+                    node.path("ip").asText(null),
+                    node.path("cdnDetected").asBoolean(false),
+                    node.path("sameIpAsMain").asBoolean(false),
+                    node.path("statusCode").asInt(0) == 0
+                            ? null : node.path("statusCode").asInt(),
+                    node.path("server").asText(null),
+                    node.path("poweredBy").asText(null),
+                    node.path("https").asBoolean(false),
+                    node.path("reachable").asBoolean(false),
+                    node.path("cors").asText(null),
+                    node.path("allowedMethods").asText(null),
+                    flags
+            ));
+        }
+        return list;
+    }
+
+
+    // ── Write realIp ──────────────────────────────────────────────────────
+
+    @Transactional
+    public void writeRealIp(Long investigationId, String realIp) {
+        InvestigationContext ctx = getOrCreate(investigationId);
+        ctx.setRealIp(realIp);
+        ctx.setUpdatedAt(LocalDateTime.now());
+        contextRepository.save(ctx);
+        log.info("Real IP written | investigationId={} realIp={}", investigationId, realIp);
+    }
+
+    // ── Write DirectScanData ──────────────────────────────────────────────────────
+
+    @Transactional
+    public void writeDirectScanData(Long investigationId,
+                                    String realIp,
+                                    String findingsJson) {
+        InvestigationContext ctx = getOrCreate(investigationId);
+        ctx.setRealIp(realIp);
+        ctx.setDirectScanFindings(findingsJson);
+        ctx.setUpdatedAt(LocalDateTime.now());
+        contextRepository.save(ctx);
+        log.info("Direct scan data written | investigationId={}", investigationId);
+    }
+
+
     @Transactional(readOnly = true)
     public InvestigationContextResponse getContext(Long investigationId) {
         InvestigationContext ctx = get(investigationId);
@@ -250,11 +343,14 @@ public class InvestigationContextService {
                 parseHeaders(ctx),
                 parsePerformance(ctx),
                 parseSsl(ctx),
-                parseTechStack(ctx),           // ← pass full ctx, not ctx.getTechStack()
+                parseTechStack(ctx),
                 parseSubdomains(ctx.getSubdomains()),
                 parseIpInfo(ctx),
                 parseShodan(ctx.getOpenPorts(), ctx.getExposedServices()),
                 parseCensys(ctx),
+                parseDnsHistory(ctx),
+                parseDirectScan(ctx),
+                parseSubdomainScan(ctx),
                 ctx.getUpdatedAt()
         );
     }
@@ -510,6 +606,122 @@ public class InvestigationContextService {
     private CensysInfo parseCensys(InvestigationContext ctx) {
         // Censys data not stored separately yet — extend entity if needed
         return null;
+    }
+
+// ── DNS History ───────────────────────────────────────────────────────────────────────
+
+    @Transactional
+    public void writeDnsHistory(Long investigationId,
+                                String fullHistoryJson,
+                                String nonCdnIpsJson,
+                                String realIp) {
+        InvestigationContext ctx = getOrCreate(investigationId);
+        ctx.setDnsHistory(fullHistoryJson);
+        ctx.setNonCdnIps(nonCdnIpsJson);
+        if (realIp != null) ctx.setRealIp(realIp);
+        ctx.setUpdatedAt(LocalDateTime.now());
+        contextRepository.save(ctx);
+        log.info("DNS history written | investigationId={} realIp={}", investigationId, realIp);
+    }
+
+
+    // ── Scan Data ───────────────────────────────────────────────────────────────────────
+    @Transactional
+    public void writeDirectScanData(Long investigationId,
+                                    String realIp,
+                                    String findingsJson,
+                                    String realServer,
+                                    String realPoweredBy,
+                                    String realRuntime,
+                                    boolean loadBalanced,
+                                    String orchestration) {
+        InvestigationContext ctx = getOrCreate(investigationId);
+        ctx.setRealIp(realIp);
+        ctx.setDirectScanFindings(findingsJson);
+        ctx.setRealServer(realServer);
+        ctx.setRealPoweredBy(realPoweredBy);
+        ctx.setRealRuntime(realRuntime);
+        ctx.setLoadBalanced(loadBalanced);
+        ctx.setOrchestration(orchestration);
+        ctx.setUpdatedAt(LocalDateTime.now());
+        contextRepository.save(ctx);
+        log.info("Direct scan data written | investigationId={} realIp={}", investigationId, realIp);
+    }
+
+    private DnsHistoryInfo parseDnsHistory(InvestigationContext ctx) {
+        if (ctx.getDnsHistory() == null && ctx.getNonCdnIps() == null) return null;
+        try {
+            List<Map<String, String>> fullHistory = new ArrayList<>();
+            List<Map<String, String>> nonCdnIps = new ArrayList<>();
+
+            if (ctx.getDnsHistory() != null) {
+                tools.jackson.databind.JsonNode node =
+                        objectMapper.readTree(ctx.getDnsHistory());
+                if (node.isArray()) {
+                    for (tools.jackson.databind.JsonNode item : node) {
+                        Map<String, String> entry = new LinkedHashMap<>();
+                        item.properties().forEach(e ->
+                                entry.put(e.getKey(), e.getValue().asText()));
+                        fullHistory.add(entry);
+                    }
+                }
+            }
+
+            if (ctx.getNonCdnIps() != null) {
+                tools.jackson.databind.JsonNode node =
+                        objectMapper.readTree(ctx.getNonCdnIps());
+                if (node.isArray()) {
+                    for (tools.jackson.databind.JsonNode item : node) {
+                        Map<String, String> entry = new LinkedHashMap<>();
+                        item.properties().forEach(e ->
+                                entry.put(e.getKey(), e.getValue().asText()));
+                        nonCdnIps.add(entry);
+                    }
+                }
+            }
+
+            return new DnsHistoryInfo(
+                    fullHistory.size(),
+                    ctx.getRealIp() != null,
+                    ctx.getRealIp(),
+                    nonCdnIps,
+                    fullHistory
+            );
+
+        } catch (Exception ex) {
+            log.warn("Failed to parse dnsHistory | error={}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private DirectScanInfo parseDirectScan(InvestigationContext ctx) {
+        if (ctx.getDirectScanFindings() == null && ctx.getRealServer() == null) return null;
+        try {
+            Boolean httpReachable = null;
+            Boolean httpsReachable = null;
+
+            if (ctx.getDirectScanFindings() != null) {
+                tools.jackson.databind.JsonNode node =
+                        objectMapper.readTree(ctx.getDirectScanFindings());
+                httpReachable  = node.path("httpReachable").asBoolean();
+                httpsReachable = node.path("httpsReachable").asBoolean();
+            }
+
+            return new DirectScanInfo(
+                    ctx.getRealIp(),
+                    ctx.getRealServer(),
+                    ctx.getRealPoweredBy(),
+                    ctx.getRealRuntime(),
+                    httpReachable,
+                    httpsReachable,
+                    ctx.isLoadBalanced(),
+                    ctx.getOrchestration()
+            );
+
+        } catch (Exception ex) {
+            log.warn("Failed to parse directScan | error={}", ex.getMessage());
+            return null;
+        }
     }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

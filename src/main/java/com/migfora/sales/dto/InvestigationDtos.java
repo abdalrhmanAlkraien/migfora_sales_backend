@@ -101,4 +101,27 @@ public class InvestigationDtos {
             String cdnProvider,
             String resolvedIp
     ) {}
+
+    public record SubdomainScanResult(
+            Integer totalScanned,
+            Integer flaggedCount,
+            List<SubdomainDetail> flagged,
+            List<SubdomainDetail> subdomains
+    ) {}
+
+    public record SubdomainDetail(
+            String subdomain,
+            String type,
+            String ip,
+            Boolean cdnDetected,
+            Boolean sameIpAsMain,
+            Integer statusCode,
+            String server,
+            String poweredBy,
+            Boolean https,
+            Boolean reachable,
+            String cors,
+            String allowedMethods,
+            List<String> flags
+    ) {}
 }

@@ -82,9 +82,12 @@ public class ReconTask {
         IP_INFO,        // requires: IP from DNS_LOOKUP  // ipinfo.io
         TECH_STACK,     // requires: domain reachable (DNS_LOOKUP success) // BuiltWith + Wappalyzer
         SUBDOMAINS,     // requires: domain (DNS_LOOKUP success) // subfinder
+        SUBDOMAIN_SCAN, // requires: domain (DNS_LOOKUP, SUBDOMAINS success, ) new
         SSL_CERT,       // requires: domain reachable (DNS_LOOKUP success) // crt.sh
         PERFORMANCE,    // requires: domain reachable (DNS_LOOKUP success) // curl timing metrics
-        HEADERS         // requires: domain reachable (DNS_LOOKUP success) // curl -I response headers
+        HEADERS,         // requires: domain reachable (DNS_LOOKUP success) // curl -I response headers
+        DNS_HISTORY,     // ← new
+        DIRECT_IP_SCAN   // ← new
     }
 
     // ── Task Statuses ─────────────────────────────────────────────────────────

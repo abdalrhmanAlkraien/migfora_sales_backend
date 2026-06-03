@@ -356,16 +356,19 @@ public class PipelineService {
     }
 
     // Dependency map — same as ReconDependencyValidator
-    private static final Map<ReconTaskType, ReconTaskType> DEPENDS_ON = Map.of(
-            ReconTaskType.WHOIS,       ReconTaskType.DNS_LOOKUP,
-            ReconTaskType.SHODAN,      ReconTaskType.DNS_LOOKUP,
-            ReconTaskType.CENSYS,      ReconTaskType.DNS_LOOKUP,
-            ReconTaskType.IP_INFO,     ReconTaskType.DNS_LOOKUP,
-            ReconTaskType.TECH_STACK,  ReconTaskType.DNS_LOOKUP,
-            ReconTaskType.SUBDOMAINS,  ReconTaskType.DNS_LOOKUP,
-            ReconTaskType.SSL_CERT,    ReconTaskType.DNS_LOOKUP,
-            ReconTaskType.PERFORMANCE, ReconTaskType.DNS_LOOKUP,
-            ReconTaskType.HEADERS,     ReconTaskType.DNS_LOOKUP
+    private static final Map<ReconTaskType, ReconTaskType> DEPENDS_ON = Map.ofEntries(
+            Map.entry(ReconTaskType.WHOIS, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.SHODAN, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.CENSYS, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.IP_INFO, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.TECH_STACK, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.SUBDOMAINS, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.SSL_CERT, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.PERFORMANCE, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.HEADERS, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.DNS_HISTORY, ReconTaskType.DNS_LOOKUP),
+            Map.entry(ReconTaskType.DIRECT_IP_SCAN, ReconTaskType.DNS_HISTORY),
+            Map.entry(ReconTaskType.SUBDOMAIN_SCAN, ReconTaskType.SUBDOMAINS)
     );
 
     private void validatePipelineSteps(List<PipelineStepRequest> steps) {

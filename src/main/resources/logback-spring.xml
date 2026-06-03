@@ -16,8 +16,8 @@
         </root>
 
         <logger name="com.migfora.sales" level="DEBUG"/>
-        <logger name="org.springframework.security" level="INFO"/>
-        <logger name="org.hibernate.SQL" level="DEBUG"/>
+<!--        <logger name="org.springframework.security" level="INFO"/>-->
+<!--        <logger name="org.hibernate.SQL" level="DEBUG"/>-->
     </springProfile>
 
     <springProfile name="prod">

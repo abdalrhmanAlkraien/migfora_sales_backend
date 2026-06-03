@@ -131,6 +131,32 @@ public class InvestigationContextDtos {
             String lastUpdatedAt
     ) {}
 
+    public record DnsHistoryInfo(
+            Integer totalRecords,
+            Boolean realIpFound,
+            String realIp,
+            List<Map<String, String>> nonCdnIps,
+            List<Map<String, String>> fullHistory
+    ) {}
+
+    public record DirectScanInfo(
+            String scannedIp,
+            String realServer,
+            String realPoweredBy,
+            String realRuntime,
+            Boolean httpReachable,
+            Boolean httpsReachable,
+            Boolean loadBalanced,
+            String orchestration
+    ) {}
+
+    public record SubdomainScanInfo(
+            Integer totalScanned,
+            Integer flaggedCount,
+            List<InvestigationDtos.SubdomainDetail> flagged,
+            List<InvestigationDtos.SubdomainDetail> subdomains
+    ) {}
+
     // ── Full Context Response ─────────────────────────────────────────────────
     public record InvestigationContextResponse(
             Long investigationId,
@@ -146,7 +172,9 @@ public class InvestigationContextDtos {
             IpInfo ipInfo,
             ShodanInfo shodan,
             CensysInfo censys,
-
+            DnsHistoryInfo dnsHistory,
+            DirectScanInfo directScan,
+            SubdomainScanInfo subdomainScan,
             LocalDateTime updatedAt
     ) {}
 }
