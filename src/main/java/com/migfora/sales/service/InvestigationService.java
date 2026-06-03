@@ -2,6 +2,7 @@ package com.migfora.sales.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.migfora.sales.dto.InvestigationDtos.*;
+import com.migfora.sales.dto.UserDtos;
 import com.migfora.sales.dto.ValidationResult;
 import com.migfora.sales.entity.Company;
 import com.migfora.sales.entity.Investigation;
@@ -44,6 +45,7 @@ public class InvestigationService {
     private final ReconTaskRepository reconTaskRepository;
     private final ReconDependencyValidator dependencyValidator;
     private final ReconTaskDispatcher dispatcher;
+    private final UserManagementService userManagementService;
 
     @Qualifier("reconTaskExecutor")
     private final TaskExecutor taskExecutor;
@@ -55,6 +57,13 @@ public class InvestigationService {
     @Transactional
     public InvestigationSummaryResponse create(CreateInvestigationRequest request,
                                                String triggeredBy) {
+
+        try {
+            UserDtos.UserDetailResponse user = userManagementService
+                    .getUserBySub(triggeredBy);
+            triggeredBy = user.name() + " " + user.familyName();
+        } catch (Exception ignored) {}
+
         Company company = companyRepository.findById(request.companyId())
                 .orElseThrow(() -> new AuthException("Company not found."));
 

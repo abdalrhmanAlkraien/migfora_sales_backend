@@ -1,6 +1,5 @@
 package com.migfora.sales.repository;
 
-
 import com.migfora.sales.entity.Contact;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 /**
  * @author: Abd-alrhman Alkraien.
  * @Date: 31/05/2026
@@ -16,8 +17,6 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface ContactRepository extends JpaRepository<Contact, Long> {
-
-    Page<Contact> findByCompanyId(Long companyId, Pageable pageable);
 
     @Query(value = """
         SELECT * FROM contacts c
@@ -41,4 +40,10 @@ public interface ContactRepository extends JpaRepository<Contact, Long> {
 
     long countByCompanyId(Long companyId);
 
+    @Query("""
+    SELECT c.status, COUNT(c)
+    FROM Contact c
+    GROUP BY c.status
+    """)
+    List<Object[]> countByStatus();
 }

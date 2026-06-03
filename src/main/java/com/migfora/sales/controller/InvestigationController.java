@@ -1,7 +1,9 @@
 package com.migfora.sales.controller;
 
+import com.migfora.sales.dto.DashboardDtos;
 import com.migfora.sales.dto.InvestigationContextDtos.*;
 import com.migfora.sales.dto.InvestigationDtos.*;
+import com.migfora.sales.service.DashboardService;
 import com.migfora.sales.service.InvestigationContextService;
 import com.migfora.sales.service.InvestigationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,6 +37,7 @@ public class InvestigationController {
 
     private final InvestigationService investigationService;
     private final InvestigationContextService investigationContextService;
+    private final DashboardService dashboardService;
 
     @Operation(summary = "Create a new investigation session for a company")
     @PostMapping

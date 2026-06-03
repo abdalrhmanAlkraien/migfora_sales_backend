@@ -19,8 +19,8 @@ public interface InvestigationRepository extends JpaRepository<Investigation, Lo
 
     Page<Investigation> findByCompanyId(Long companyId, Pageable pageable);
 
-    List<Investigation> findByCompanyIdAndStatus(Long companyId,
-                                                 InvestigationStatus status);
+    Page<Investigation> findAll(Pageable pageable);
+
 
     long countByCompanyId(Long companyId);
 }

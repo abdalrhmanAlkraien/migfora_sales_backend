@@ -53,4 +53,29 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, Long> {
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("endOfDay") LocalDateTime endOfDay
     );
+
+    // Follow-ups scheduled for today
+    @Query("""
+    SELECT f FROM FollowUp f
+    WHERE f.scheduledAt >= :startOfDay
+    AND f.scheduledAt < :endOfDay
+    AND f.status = com.migfora.sales.entity.FollowUp.FollowUpStatus.SCHEDULED
+    ORDER BY f.scheduledAt ASC
+    """)
+    Page<FollowUp> findTodayScheduled(
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay")   LocalDateTime endOfDay,
+            Pageable pageable);
+
+    @Query("""
+    SELECT COUNT(f) FROM FollowUp f
+    WHERE f.scheduledAt >= :startOfDay
+    AND f.scheduledAt < :endOfDay
+    AND f.status = com.migfora.sales.entity.FollowUp.FollowUpStatus.SCHEDULED
+    """)
+    long countTodayScheduled(
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay")   LocalDateTime endOfDay);
+
+    long countByStatus(FollowUp.FollowUpStatus status);
 }

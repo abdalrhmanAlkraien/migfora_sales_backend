@@ -238,6 +238,21 @@ public class UserManagementService {
         }
     }
 
+    public long countUsers() {
+        try {
+            ListUsersResponse response = cognitoClient.listUsers(
+                    ListUsersRequest.builder()
+                            .userPoolId(userPoolId)
+                            .limit(60)
+                            .build()
+            );
+            return response.users().size();
+        } catch (Exception ex) {
+            log.warn("[Dashboard] Failed to count users | error={}", ex.getMessage());
+            return 0L;
+        }
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private List<String> getUserGroups(String sub) {
