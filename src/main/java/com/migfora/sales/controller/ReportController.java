@@ -27,10 +27,9 @@ import org.springframework.web.bind.annotation.*;
 @PreAuthorize("hasAnyRole('ADMIN_GROUP', 'SALES')")
 public class ReportController {
 
-
     private final ReportService reportService;
 
-    @Operation(summary = "Generate a report for an investigation")
+    @Operation(summary = "Generate a report (TECHNICAL_OVERVIEW or SALES_ROADMAP)")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ReportResponse create(
@@ -41,19 +40,19 @@ public class ReportController {
 
     @Operation(summary = "Get all reports for a company")
     @GetMapping("/company/{companyId}")
-    public Page<ReportResponse> getByCompany(
+    public Page<ReportListResponse> getByCompany(
             @PathVariable Long companyId,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
         return reportService.getByCompany(companyId, pageable);
     }
 
-    @Operation(summary = "Get report by ID with download URL")
+    @Operation(summary = "Get report by ID with presigned S3 download URL")
     @GetMapping("/{id}")
     public ReportResponse getById(@PathVariable Long id) {
         return reportService.getById(id);
     }
 
-    @Operation(summary = "Delete report")
+    @Operation(summary = "Delete report and remove from S3")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN_GROUP')")
     @ResponseStatus(HttpStatus.NO_CONTENT)

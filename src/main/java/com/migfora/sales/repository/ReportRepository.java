@@ -23,5 +23,5 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 
     List<Report> findByCompanyIdAndType(Long companyId, ReportType type);
     long countByCompanyId(Long companyId);
-
+    List<Report> findByStatus(Report.ReportStatus status);
 }

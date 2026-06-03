@@ -20,7 +20,6 @@ import java.time.LocalDateTime;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Report {
 
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -41,7 +40,24 @@ public class Report {
     @JoinColumn(name = "investigation_id")
     private Investigation investigation;
 
-    private String s3Key;
+    // ── LLM metadata ──────────────────────────────────────────────────────────
+    @Column(columnDefinition = "TEXT")
+    private String content;          // full markdown content from LLM
+
+    @Column(columnDefinition = "TEXT")
+    private String summary;          // short 3-5 line summary
+
+    private String aiProvider;       // qubrid | bedrock | migfora
+    private String aiModel;          // model used
+    private String language;         // en | ar
+    private Integer tokenCount;      // estimated tokens used
+
+    // ── S3 ────────────────────────────────────────────────────────────────────
+    private String s3Key;            // S3 object key for PDF
+    private String s3Bucket;         // S3 bucket name
+
+    // ── Metadata ──────────────────────────────────────────────────────────────
+    private String title;
     private String generatedBy;
     private String errorMessage;
 
@@ -52,10 +68,14 @@ public class Report {
     private LocalDateTime generatedAt;
 
     public enum ReportType {
-        INVESTIGATION, SALES_PROPOSAL
+        TECHNICAL_OVERVIEW,
+        SALES_ROADMAP
     }
 
     public enum ReportStatus {
-        PENDING, GENERATING, COMPLETED, FAILED
+        PENDING,
+        GENERATING,
+        COMPLETED,
+        FAILED
     }
 }

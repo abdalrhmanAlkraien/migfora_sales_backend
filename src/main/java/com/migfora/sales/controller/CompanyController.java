@@ -103,7 +103,7 @@ public class CompanyController {
 
     @Operation(summary = "Get reports for a company")
     @GetMapping("/{id}/reports")
-    public Page<ReportDtos.ReportResponse> getReports(
+    public Page<ReportDtos.ReportListResponse> getReports(
             @PathVariable Long id,
             @PageableDefault(size = 3) Pageable pageable) {
         return reportService.getByCompany(id, pageable);
