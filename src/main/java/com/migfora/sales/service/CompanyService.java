@@ -1,8 +1,10 @@
 package com.migfora.sales.service;
 
 import com.migfora.sales.dto.CompanyDtos.*;
+import com.migfora.sales.dto.PlatformDtos;
 import com.migfora.sales.entity.Company;
 import com.migfora.sales.entity.Company.*;
+import com.migfora.sales.entity.CompanyPlatform;
 import com.migfora.sales.exception.AuthException;
 import com.migfora.sales.repository.CompanyRepository;
 import com.migfora.sales.repository.ContactRepository;
@@ -15,6 +17,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -31,16 +36,16 @@ public class CompanyService {
     private final ContactRepository contactRepository;
     private final InvestigationRepository investigationRepository;
     private final ReportRepository reportRepository;
+    private final CompanyPlatformService platformService;
 
     @Transactional
     public CompanyResponse create(CreateCompanyRequest request, String createdBy) {
-        if (request.domain() != null && companyRepository.existsByDomain(request.domain())) {
+        if (request.website() != null && companyRepository.existsByWebsite(request.website())) {
             throw new AuthException("A company with this domain already exists.");
         }
 
         Company company = Company.builder()
                 .name(request.name())
-                .domain(request.domain())
                 .industry(request.industry())
                 .country(request.country())
                 .city(request.city())
@@ -50,6 +55,27 @@ public class CompanyService {
                 .createdBy(createdBy)
                 .status(request.status() != null ? request.status() : CompanyStatus.PROSPECT)
                 .build();
+
+        // Build platforms and link to company
+        List<CompanyPlatform> platforms = request.platforms().stream()
+                .map(p -> CompanyPlatform.builder()
+                        .company(company)                 // ← link to company
+                        .type(p.type())
+                        .name(p.name())
+                        .url(p.url())
+                        .domain(extractDomain(p.domain(), p.url()))
+                        .bundleId(p.bundleId())
+                        .appStoreUrl(p.appStoreUrl())
+                        .playStoreUrl(p.playStoreUrl())
+                        .description(p.description())
+                        .technology(p.technology())
+                        .hostingProvider(p.hostingProvider())
+                        .notes(p.notes())
+                        .status(CompanyPlatform.PlatformStatus.ACTIVE)
+                        .build())
+                .toList();
+
+        company.setPlatforms(platforms);
 
         Company saved = companyRepository.save(company);
         log.info("Company created | id={} name={} by={}", saved.getId(), saved.getName(), createdBy);
@@ -82,7 +108,6 @@ public class CompanyService {
         Company company = findById(id);
 
         if (request.name()     != null) company.setName(request.name());
-        if (request.domain()   != null) company.setDomain(request.domain());
         if (request.industry() != null) company.setIndustry(request.industry());
         if (request.country()  != null) company.setCountry(request.country());
         if (request.city()     != null) company.setCity(request.city());
@@ -110,15 +135,29 @@ public class CompanyService {
     }
 
     public CompanyResponse toResponse(Company c) {
+        List<PlatformDtos.PlatformResponse> platforms = platformService.getByCompany(c.getId());
         return new CompanyResponse(
-                c.getId(), c.getName(), c.getDomain(),
+                c.getId(), c.getName(), c.getWebsite(), c.getSize(),   // ← company-level fields
                 c.getIndustry(), c.getCountry(), c.getCity(),
-                c.getWebsite(), c.getSize(), c.getNotes(),
-                c.getCreatedBy(), c.getStatus(),
-                investigationRepository.countByCompanyId(c.getId()),
+                c.getNotes(), c.getCreatedBy(), c.getStatus(),
+                platforms,
+                investigationRepository.countByPlatformIdIn(
+                        platforms.stream().map(PlatformDtos.PlatformResponse::id).toList()),
                 contactRepository.countByCompanyId(c.getId()),
-                reportRepository.countByCompanyId(c.getId()),
+                reportRepository.countByPlatformIdIn(
+                        platforms.stream().map(PlatformDtos.PlatformResponse::id).toList()),
                 c.getCreatedAt(), c.getUpdatedAt()
         );
+    }
+
+    private String extractDomain(String domain, String url) {
+        if (domain != null && !domain.isBlank()) return domain;
+        if (url == null || url.isBlank()) return null;
+        try {
+            String d = url.replaceFirst("https?://", "").split("/")[0];
+            return d.startsWith("www.") ? d.substring(4) : d;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

@@ -1,7 +1,24 @@
 package com.migfora.sales.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -16,7 +33,11 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "investigations")
 @EntityListeners(AuditingEntityListener.class)
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Investigation {
 
 
@@ -32,10 +53,6 @@ public class Investigation {
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private InvestigationStatus status = InvestigationStatus.OPEN;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "company_id")
-    private Company company;
 
     private String triggeredBy;
 
@@ -79,6 +96,10 @@ public class Investigation {
             cascade = CascadeType.ALL,
             fetch = FetchType.LAZY)
     private InvestigationContext context;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "platform_id", nullable = false)
+    private CompanyPlatform platform;
 
     public enum InvestigationStatus {
         OPEN,       // session created, tasks can be added and run

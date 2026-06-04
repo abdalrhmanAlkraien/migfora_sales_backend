@@ -84,9 +84,17 @@ public class CompanyController {
 
     // ── Company nested resources ──────────────────────────────────────────────
 
+    @Operation(summary = "Get investigations for a platform")
+    @GetMapping("/{id}/investigations/platform")
+    public Page<InvestigationDtos.InvestigationSummaryResponse> getPlatformInvestigations(
+            @PathVariable Long id,
+            @PageableDefault(size = 3) Pageable pageable) {
+        return investigationService.getByPlatform(id, pageable);
+    }
+
     @Operation(summary = "Get investigations for a company")
     @GetMapping("/{id}/investigations")
-    public Page<InvestigationDtos.InvestigationSummaryResponse> getInvestigations(
+    public Page<InvestigationDtos.InvestigationSummaryResponse> getCompanyInvestigations(
             @PathVariable Long id,
             @PageableDefault(size = 3) Pageable pageable) {
         return investigationService.getByCompany(id, pageable);
@@ -106,6 +114,6 @@ public class CompanyController {
     public Page<ReportDtos.ReportListResponse> getReports(
             @PathVariable Long id,
             @PageableDefault(size = 3) Pageable pageable) {
-        return reportService.getByCompany(id, pageable);
+        return reportService.getByPlatform(id, pageable);
     }
 }

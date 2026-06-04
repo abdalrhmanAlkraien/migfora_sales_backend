@@ -8,7 +8,7 @@ import lombok.Getter;
  * @Time: 1:42 PM
  */
 @Getter
-public class PasswordChangeRequiredException extends RuntimeException{
+public class PasswordChangeRequiredException extends RuntimeException {
 
     private final String session;
 

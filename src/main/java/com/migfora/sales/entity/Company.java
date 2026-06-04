@@ -7,6 +7,8 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -26,12 +28,11 @@ public class Company {
     @Column(nullable = false)
     private String name;
 
-    @Column(unique = true)
-    private String domain;
-
     private String industry;
     private String country;
     private String city;
+    private String domain;
+    @Column(unique = true)
     private String website;
     private String size;           // STARTUP, SME, ENTERPRISE
     private String notes;
@@ -50,6 +51,12 @@ public class Company {
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    @OneToMany(mappedBy = "company",
+            cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY,
+            orphanRemoval = true)
+    private List<CompanyPlatform> platforms = new ArrayList<>();
 
     public enum CompanyStatus {
         PROSPECT, CONTACTED, QUALIFIED, PROPOSAL, CLOSED_WON, CLOSED_LOST

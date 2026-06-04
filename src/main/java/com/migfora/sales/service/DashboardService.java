@@ -119,8 +119,8 @@ public class DashboardService {
         return new InvestigationSummaryResponse(
                 i.getId(),
                 i.getDomain(),
-                i.getCompany().getId(),
-                i.getCompany().getName(),
+                i.getPlatform().getCompany().getId(),
+                i.getPlatform().getCompany().getName(),
                 i.getStatus().name(),
                 i.getIpAddress(),
                 i.getCreatedAt()

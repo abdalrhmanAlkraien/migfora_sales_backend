@@ -4,12 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.migfora.sales.dto.InvestigationDtos.*;
 import com.migfora.sales.dto.UserDtos;
 import com.migfora.sales.dto.ValidationResult;
-import com.migfora.sales.entity.Company;
+import com.migfora.sales.entity.CompanyPlatform;
 import com.migfora.sales.entity.Investigation;
 import com.migfora.sales.entity.Investigation.*;
 import com.migfora.sales.entity.ReconTask;
 import com.migfora.sales.entity.ReconTask.*;
 import com.migfora.sales.exception.AuthException;
+import com.migfora.sales.repository.CompanyPlatformRepository;
 import com.migfora.sales.repository.CompanyRepository;
 import com.migfora.sales.repository.InvestigationRepository;
 import com.migfora.sales.repository.ReconTaskRepository;
@@ -46,38 +47,49 @@ public class InvestigationService {
     private final ReconDependencyValidator dependencyValidator;
     private final ReconTaskDispatcher dispatcher;
     private final UserManagementService userManagementService;
+    private final CompanyPlatformRepository platformRepository;
 
     @Qualifier("reconTaskExecutor")
     private final TaskExecutor taskExecutor;
 
     // ── Create investigation session ──────────────────────────────────────────
 
-    // ── Create investigation session ──────────────────────────────────────────
-
     @Transactional
     public InvestigationSummaryResponse create(CreateInvestigationRequest request,
                                                String triggeredBy) {
-
         try {
             UserDtos.UserDetailResponse user = userManagementService
                     .getUserBySub(triggeredBy);
             triggeredBy = user.name() + " " + user.familyName();
         } catch (Exception ignored) {}
 
-        Company company = companyRepository.findById(request.companyId())
-                .orElseThrow(() -> new AuthException("Company not found."));
+        // ── Load platform (not company directly) ──────────────────────────
+        CompanyPlatform platform = platformRepository
+                .findById(request.platformId())
+                .orElseThrow(() -> new AuthException("Platform not found."));
+
+        // Use platform domain unless overridden
+        String domain = (request.domain() != null && !request.domain().isBlank())
+                ? request.domain()
+                : platform.getDomain();
+
+        if (domain == null || domain.isBlank()) {
+            throw new AuthException(
+                    "Domain required — add a domain to the platform or provide one explicitly.");
+        }
 
         Investigation investigation = Investigation.builder()
-                .domain(request.domain())
-                .company(company)
+                .domain(domain)
+                .platform(platform)
                 .triggeredBy(triggeredBy)
                 .status(InvestigationStatus.OPEN)
                 .build();
 
         Investigation saved = investigationRepository.save(investigation);
 
-        log.info("Investigation session created | id={} domain={} company={} by={}",
-                saved.getId(), saved.getDomain(), company.getId(), triggeredBy);
+        log.info("Investigation created | id={} domain={} platform={} company={} by={}",
+                saved.getId(), domain,
+                platform.getId(), platform.getCompany().getId(), triggeredBy);
 
         return toSummaryResponse(saved);
     }
@@ -210,8 +222,15 @@ public class InvestigationService {
     // ── Get all investigations ────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
+    public Page<InvestigationSummaryResponse> getByPlatform(Long platformId,
+                                                            Pageable pageable) {
+        return investigationRepository.findByPlatformId(platformId, pageable)
+                .map(this::toSummaryResponse);
+    }
+
+    @Transactional(readOnly = true)
     public Page<InvestigationSummaryResponse> getByCompany(Long companyId,
-                                                           Pageable pageable) {
+                                                            Pageable pageable) {
         return investigationRepository.findByCompanyId(companyId, pageable)
                 .map(this::toSummaryResponse);
     }
@@ -385,10 +404,19 @@ public class InvestigationService {
         long failed = tasks.stream()
                 .filter(t -> t.getStatus() == ReconTaskStatus.FAILED).count();
 
+        CompanyPlatform platform = i.getPlatform();
+
         return new InvestigationSummaryResponse(
-                i.getId(), i.getDomain(), i.getIpAddress(),
-                i.getStatus(), i.getCompany().getId(),
-                i.getCompany().getName(), i.getTriggeredBy(),
+                i.getId(),
+                i.getDomain(),
+                i.getIpAddress(),
+                i.getStatus(),
+                platform.getCompany().getId(),        // ← via platform
+                platform.getCompany().getName(),      // ← via platform
+                platform.getId(),                     // ← new
+                platform.getName(),                   // ← new
+                platform.getType().name(),            // ← new
+                i.getTriggeredBy(),
                 tasks.size(), (int) completed, (int) failed,
                 i.getCreatedAt(), i.getUpdatedAt()
         );
@@ -396,11 +424,19 @@ public class InvestigationService {
 
     private InvestigationResponse toFullResponse(Investigation i,
                                                  List<ReconTask> tasks) {
+        CompanyPlatform platform = i.getPlatform();
         return new InvestigationResponse(
-                i.getId(), i.getDomain(), i.getIpAddress(),
-                i.getStatus(), i.getCompany().getId(),
-                i.getCompany().getName(), i.getTriggeredBy(),
-                tasks.stream().map(this::toTaskResponse).collect(Collectors.toList()),
+                i.getId(),
+                i.getDomain(),
+                i.getIpAddress(),
+                i.getStatus(),
+                platform.getCompany().getId(),
+                platform.getCompany().getName(),
+                platform.getId(),
+                platform.getName(),
+                platform.getType().name(),
+                i.getTriggeredBy(),
+                tasks.stream().map(this::toTaskResponse).toList(),
                 i.getCreatedAt(), i.getUpdatedAt()
         );
     }

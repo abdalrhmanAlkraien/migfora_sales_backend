@@ -50,6 +50,12 @@ public class GlobalExceptionHandler {
         return errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", null);
     }
 
+    @ExceptionHandler(ResourceNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, Object> handleResourceNotFound(Exception ex) {
+        return errorBody(HttpStatus.NOT_FOUND, "The resource does not exist", null);
+    }
+
     @ExceptionHandler(PasswordChangeRequiredException.class)
     @ResponseStatus(HttpStatus.PRECONDITION_REQUIRED)   // 428
     public Map<String, Object> handlePasswordChange(PasswordChangeRequiredException ex) {

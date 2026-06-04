@@ -26,11 +26,28 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
     private static final String MDC_USER_ID = "userId";
 
+    private boolean isPollingRequest(HttpServletRequest request) {
+        if (!"GET".equals(request.getMethod())) return false;
+        String path = request.getRequestURI();
+
+        // Match exact polling patterns
+        // e.g. GET /api/v1/reports/1  or  GET /api/v1/investigations/5/tasks/12
+        return (path.matches("/api/v1/reports/\\d+") ||
+                path.matches("/api/v1/investigations/\\d+/tasks/\\d+") ||
+                path.matches("/api/v1/investigations/\\d+/tasks"));
+    }
+
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
+
+
+        if (isPollingRequest(request)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         long start = System.currentTimeMillis();
 

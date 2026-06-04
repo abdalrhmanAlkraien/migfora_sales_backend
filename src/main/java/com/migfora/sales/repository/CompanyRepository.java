@@ -18,15 +18,7 @@ import java.util.Optional;
 @Repository
 public interface CompanyRepository extends JpaRepository<Company, Long> {
 
-    Optional<Company> findByDomain(String domain);
-
-    boolean existsByDomain(String domain);
-
-    Page<Company> findByCreatedBy(String createdBy, Pageable pageable);
-
-    Page<Company> findByStatus(Company.CompanyStatus status, Pageable pageable);
-
-
+    boolean existsByWebsite(String website);
 
     @Query(value = """
         SELECT * FROM companies c

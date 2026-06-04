@@ -33,8 +33,8 @@ public class Report {
     private ReportStatus status = ReportStatus.PENDING;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "company_id")
-    private Company company;
+    @JoinColumn(name = "platform_id", nullable = false)
+    private CompanyPlatform platform;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "investigation_id")

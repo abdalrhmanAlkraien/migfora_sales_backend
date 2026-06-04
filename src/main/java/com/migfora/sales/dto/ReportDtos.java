@@ -16,7 +16,7 @@ public class ReportDtos {
 
 
     public record CreateReportRequest(
-            @NotNull Long companyId,
+            @NotNull Long platformId,        // ← was companyId
             @NotNull Long investigationId,
             @NotNull Report.ReportType type
     ) {}
@@ -27,6 +27,8 @@ public class ReportDtos {
             Report.ReportStatus status,
             Long companyId,
             String companyName,
+            Long platformId,                 // ← new
+            String platformName,             // ← new
             Long investigationId,
             String title,
             String summary,
@@ -48,6 +50,8 @@ public class ReportDtos {
             Report.ReportStatus status,
             Long companyId,
             String companyName,
+            Long platformId,                 // ← new
+            String platformName,             // ← new
             Long investigationId,
             String title,
             String summary,

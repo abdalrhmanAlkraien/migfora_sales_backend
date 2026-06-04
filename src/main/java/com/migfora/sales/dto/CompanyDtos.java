@@ -2,9 +2,12 @@ package com.migfora.sales.dto;
 
 import com.migfora.sales.entity.Company.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -23,7 +26,11 @@ public class CompanyDtos {
             String website,
             String size,
             String notes,
-            CompanyStatus status      // ← optional, defaults to LEAD if null
+            CompanyStatus status,
+
+            @NotNull
+            @Size(min = 1, message = "At least one platform is required")
+            List<PlatformDtos.CreatePlatformRequest> platforms
 
     ) {}
 
@@ -42,7 +49,6 @@ public class CompanyDtos {
     public record CompanyResponse(
             Long id,
             String name,
-            String domain,
             String industry,
             String country,
             String city,
@@ -51,6 +57,7 @@ public class CompanyDtos {
             String notes,
             String createdBy,
             CompanyStatus status,
+            List<PlatformDtos.PlatformResponse> platforms,       // ← included in response
             long investigationsCount,
             long contactsCount,
             long reportsCount,

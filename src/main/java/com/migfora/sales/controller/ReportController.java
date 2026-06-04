@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -36,6 +37,14 @@ public class ReportController {
             @Valid @RequestBody CreateReportRequest request,
             @AuthenticationPrincipal Jwt jwt) {
         return reportService.create(request, jwt.getSubject());
+    }
+
+    @Operation(summary = "Get all reports for a company")
+    @GetMapping("/platform/{platformId}")
+    public Page<ReportListResponse> getByPlatform(
+            @PathVariable Long platformId,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+        return reportService.getByPlatform(platformId, pageable);
     }
 
     @Operation(summary = "Get all reports for a company")

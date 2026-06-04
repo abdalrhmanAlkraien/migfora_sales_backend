@@ -1,15 +1,16 @@
 package com.migfora.sales.service;
 
 import com.migfora.sales.config.AiConfig;
-import com.migfora.sales.entity.Company;
-import com.migfora.sales.entity.InvestigationContext;
-import com.migfora.sales.repository.CompanyRepository;
-import com.migfora.sales.exception.AuthException;
+import com.migfora.sales.dto.ReportDtos.CreateReportRequest;
+import com.migfora.sales.dto.ReportDtos.ReportListResponse;
+import com.migfora.sales.dto.ReportDtos.ReportResponse;
+import com.migfora.sales.entity.CompanyPlatform;
 import com.migfora.sales.entity.Investigation;
-import com.migfora.sales.repository.InvestigationRepository;
-import com.migfora.sales.dto.ReportDtos.*;
+import com.migfora.sales.entity.InvestigationContext;
 import com.migfora.sales.entity.Report;
-import com.migfora.sales.entity.Report.ReportStatus;
+import com.migfora.sales.exception.AuthException;
+import com.migfora.sales.repository.CompanyPlatformRepository;
+import com.migfora.sales.repository.InvestigationRepository;
 import com.migfora.sales.repository.ReportRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -36,44 +37,48 @@ import java.util.concurrent.CompletableFuture;
 public class ReportService {
 
 
-    private final ReportRepository             reportRepository;
-    private final CompanyRepository            companyRepository;
-    private final InvestigationRepository      investigationRepository;
-    private final InvestigationContextService  contextService;
-    private final LlmService                   llmService;
-    private final PdfGenerationService         pdfService;
-    private final S3Service                    s3Service;
+    private final ReportRepository reportRepository;
+    private final InvestigationRepository investigationRepository;
+    private final InvestigationContextService contextService;
+    private final LlmService llmService;
+    private final PdfGenerationService pdfService;
+    private final S3Service s3Service;
     private final AiConfig aiConfig;
+    private final CompanyPlatformRepository platformRepository;
 
     @Value("${aws.s3.bucket:migfora-reports}")
     private String s3Bucket;
 
     @Transactional
     public ReportResponse create(CreateReportRequest request, String generatedBy) {
-        Company company = companyRepository.findById(request.companyId())
-                .orElseThrow(() -> new AuthException("Company not found."));
+        CompanyPlatform platform = platformRepository
+                .findById(request.platformId())
+                .orElseThrow(() -> new AuthException("Platform not found."));
 
         Investigation investigation = investigationRepository
                 .findById(request.investigationId())
                 .orElseThrow(() -> new AuthException("Investigation not found."));
 
-        // Create report record as GENERATING
         Report report = Report.builder()
                 .type(request.type())
-                .company(company)
+                .platform(platform)
                 .investigation(investigation)
                 .generatedBy(generatedBy)
-                .status(Report.ReportStatus.GENERATING)
+                .status(Report.ReportStatus.PENDING)
                 .language("en")
                 .build();
 
         report = reportRepository.save(report);
         log.info("[Report] Created | id={} type={}", report.getId(), report.getType());
-        InvestigationContext ctx = contextService.get(investigation.getId());
-        String domain = investigation.getDomain();
 
-        Long reportId = report.getId();
-        CompletableFuture.runAsync(() -> generateAsync(reportId, request, domain, ctx));
+        // Load context and domain BEFORE async — session is open here
+        InvestigationContext ctx = contextService.get(investigation.getId());
+        String domain            = investigation.getDomain();
+        Long reportId            = report.getId();
+
+        // Pass only primitives/value objects to async — no JPA proxies
+        CompletableFuture.runAsync(() ->
+                generateAsync(reportId, request, domain, ctx));
 
         return toResponse(report, null);
     }
@@ -82,19 +87,28 @@ public class ReportService {
     public void generateAsync(Long reportId, CreateReportRequest request,
                               String domain, InvestigationContext ctx) {
 
-        Report report = reportRepository.findById(reportId).orElseThrow();
+        // Load fresh with platform + company eagerly
+        Report report = reportRepository.findByIdWithPlatform(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found: " + reportId));
+
         try {
             report.setStatus(Report.ReportStatus.GENERATING);
             reportRepository.save(report);
 
-            String prompt = buildPrompt(request.type(), domain, ctx);
+            String prompt  = buildPrompt(request.type(), domain, ctx);
             String content = llmService.generate(prompt);
             String summary = extractSummary(content);
-            String title = buildTitle(request.type(), domain);
+            String title   = buildTitle(request.type(), domain);
 
             byte[] pdfBytes = pdfService.generatePdf(title, content, domain);
-            String s3Key = buildS3Key(report.getCompany().getId(),
-                    report.getInvestigation().getId(), reportId, request.type());
+
+            String s3Key = buildS3Key(
+                    report.getPlatform().getCompany().getId(),
+                    report.getPlatform().getId(),
+                    report.getInvestigation().getId(),
+                    reportId,
+                    request.type()
+            );
             s3Service.uploadPdf(pdfBytes, s3Key);
 
             report.setTitle(title);
@@ -122,6 +136,12 @@ public class ReportService {
     @Transactional(readOnly = true)
     public Page<ReportListResponse> getByCompany(Long companyId, Pageable pageable) {
         return reportRepository.findByCompanyId(companyId, pageable)
+                .map(this::toListResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ReportListResponse> getByPlatform(Long platformId, Pageable pageable) {
+        return reportRepository.findByPlatformId(platformId, pageable)
                 .map(this::toListResponse);
     }
 
@@ -181,10 +201,12 @@ public class ReportService {
 
     // ── S3 key builder ────────────────────────────────────────────────────────
 
-    private String buildS3Key(Long companyId, Long investigationId,
-                              Long reportId, Report.ReportType type) {
-        return String.format("reports/company-%d/investigation-%d/%d-%s-%s.pdf",
-                companyId, investigationId, reportId,
+    private String buildS3Key(Long companyId, Long platformId,
+                              Long investigationId, Long reportId,
+                              Report.ReportType type) {
+        return String.format(
+                "reports/company-%d/platform-%d/investigation-%d/%d-%s-%s.pdf",
+                companyId, platformId, investigationId, reportId,
                 type.name().toLowerCase(),
                 LocalDateTime.now().format(
                         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")));
@@ -265,19 +287,19 @@ public class ReportService {
     private String buildSystemPrompt(Report.ReportType type) {
         return switch (type) {
             case TECHNICAL_OVERVIEW -> """
-                You are a senior cloud architect at MIGFORA, a technology services 
-                company specializing in AWS cloud engineering for Saudi Arabia and GCC.
-                Generate a professional technical overview report in clear English 
-                using markdown. Be factual, insightful, and specific to the data provided.
-                """;
+                    You are a senior cloud architect at MIGFORA, a technology services 
+                    company specializing in AWS cloud engineering for Saudi Arabia and GCC.
+                    Generate a professional technical overview report in clear English 
+                    using markdown. Be factual, insightful, and specific to the data provided.
+                    """;
             case SALES_ROADMAP -> """
-                You are a senior solutions architect at MIGFORA, a technology services 
-                company specializing in AWS, DevOps, and software development for 
-                Saudi Arabia and GCC clients.
-                Generate a strategic sales roadmap in clear English using markdown.
-                Identify specific opportunities, reference actual technologies found,
-                and give the sales engineer concrete talking points.
-                """;
+                    You are a senior solutions architect at MIGFORA, a technology services 
+                    company specializing in AWS, DevOps, and software development for 
+                    Saudi Arabia and GCC clients.
+                    Generate a strategic sales roadmap in clear English using markdown.
+                    Identify specific opportunities, reference actual technologies found,
+                    and give the sales engineer concrete talking points.
+                    """;
         };
     }
 
@@ -286,40 +308,40 @@ public class ReportService {
                                    String context) {
         return switch (type) {
             case TECHNICAL_OVERVIEW -> """
-                Analyze the following reconnaissance data for %s and generate a 
-                Technical Overview Report with these sections:
-                
-                1. **Executive Summary**
-                2. **Infrastructure Overview** (hosting, cloud, CDN, architecture)
-                3. **Technology Stack** (frontend, backend, frameworks)
-                4. **Security Assessment** (SSL, headers, exposed services)
-                5. **Performance Analysis** (TTFB, load times)
-                6. **Network Architecture** (IPs, subdomains, CDN)
-                7. **Engineering Maturity**
-                8. **Key Findings**
-                
-                Data:
-                %s
-                """.formatted(domain, context);
+                    Analyze the following reconnaissance data for %s and generate a 
+                    Technical Overview Report with these sections:
+                    
+                    1. **Executive Summary**
+                    2. **Infrastructure Overview** (hosting, cloud, CDN, architecture)
+                    3. **Technology Stack** (frontend, backend, frameworks)
+                    4. **Security Assessment** (SSL, headers, exposed services)
+                    5. **Performance Analysis** (TTFB, load times)
+                    6. **Network Architecture** (IPs, subdomains, CDN)
+                    7. **Engineering Maturity**
+                    8. **Key Findings**
+                    
+                    Data:
+                    %s
+                    """.formatted(domain, context);
 
             case SALES_ROADMAP -> """
-                Based on the reconnaissance data for %s, generate a Sales Roadmap 
-                identifying opportunities for MIGFORA with these sections:
-                
-                1. **Opportunity Summary** (pain points, why they need help)
-                2. **AWS Migration Roadmap** (what to migrate and how)
-                3. **Infrastructure Improvements** (HA, scaling, redundancy)
-                4. **Security Hardening** (specific gaps and fixes)
-                5. **Observability & Monitoring** (what's missing)
-                6. **DevOps & CI/CD Improvements**
-                7. **Performance Optimization**
-                8. **Estimated Engagement** (Small/Medium/Large, timeline)
-                9. **Sales Talking Points** (3-5 specific points for first meeting)
-                10. **Proposed MIGFORA Services**
-                
-                Data:
-                %s
-                """.formatted(domain, context);
+                    Based on the reconnaissance data for %s, generate a Sales Roadmap 
+                    identifying opportunities for MIGFORA with these sections:
+                    
+                    1. **Opportunity Summary** (pain points, why they need help)
+                    2. **AWS Migration Roadmap** (what to migrate and how)
+                    3. **Infrastructure Improvements** (HA, scaling, redundancy)
+                    4. **Security Hardening** (specific gaps and fixes)
+                    5. **Observability & Monitoring** (what's missing)
+                    6. **DevOps & CI/CD Improvements**
+                    7. **Performance Optimization**
+                    8. **Estimated Engagement** (Small/Medium/Large, timeline)
+                    9. **Sales Talking Points** (3-5 specific points for first meeting)
+                    10. **Proposed MIGFORA Services**
+                    
+                    Data:
+                    %s
+                    """.formatted(domain, context);
         };
     }
 
@@ -331,47 +353,47 @@ public class ReportService {
         // ── Role + Task ───────────────────────────────────────────────────────────
         switch (type) {
             case TECHNICAL_OVERVIEW -> prompt.append("""
-                You are a senior cloud architect at MIGFORA, a technology services
-                company specializing in AWS cloud engineering for Saudi Arabia and GCC.
-                
-                Analyze the reconnaissance data below for %s and generate a professional
-                Technical Overview Report in clear English using markdown.
-                Be factual, specific, and draw conclusions from patterns in the data.
-                
-                Required sections:
-                1. **Executive Summary** (3-5 sentences)
-                2. **Infrastructure Overview** (hosting, cloud provider, CDN, architecture)
-                3. **Technology Stack** (frontend, backend, frameworks, database hints)
-                4. **Security Assessment** (SSL, headers, exposed services, vulnerabilities)
-                5. **Performance Analysis** (TTFB, load times, optimization opportunities)
-                6. **Network Architecture** (IPs, subdomains, CDN setup)
-                7. **Engineering Maturity** (based on tech choices, security, architecture)
-                8. **Key Findings** (bullet points of most important discoveries)
-                
-                """.formatted(domain));
+                    You are a senior cloud architect at MIGFORA, a technology services
+                    company specializing in AWS cloud engineering for Saudi Arabia and GCC.
+                    
+                    Analyze the reconnaissance data below for %s and generate a professional
+                    Technical Overview Report in clear English using markdown.
+                    Be factual, specific, and draw conclusions from patterns in the data.
+                    
+                    Required sections:
+                    1. **Executive Summary** (3-5 sentences)
+                    2. **Infrastructure Overview** (hosting, cloud provider, CDN, architecture)
+                    3. **Technology Stack** (frontend, backend, frameworks, database hints)
+                    4. **Security Assessment** (SSL, headers, exposed services, vulnerabilities)
+                    5. **Performance Analysis** (TTFB, load times, optimization opportunities)
+                    6. **Network Architecture** (IPs, subdomains, CDN setup)
+                    7. **Engineering Maturity** (based on tech choices, security, architecture)
+                    8. **Key Findings** (bullet points of most important discoveries)
+                    
+                    """.formatted(domain));
 
             case SALES_ROADMAP -> prompt.append("""
-                You are a senior solutions architect at MIGFORA, a technology services
-                company specializing in AWS, DevOps, and software development for
-                Saudi Arabia and GCC clients.
-                
-                Based on the reconnaissance data below for %s, generate a strategic
-                Sales Roadmap identifying specific opportunities for MIGFORA.
-                Reference actual technologies found and give concrete talking points.
-                
-                Required sections:
-                1. **Opportunity Summary** (pain points, why they need help)
-                2. **AWS Migration Roadmap** (what to migrate and how)
-                3. **Infrastructure Improvements** (HA, scaling, redundancy)
-                4. **Security Hardening** (specific gaps and fixes)
-                5. **Observability & Monitoring** (what's missing, what to add)
-                6. **DevOps & CI/CD Improvements**
-                7. **Performance Optimization**
-                8. **Estimated Engagement** (Small/Medium/Large, timeline estimate)
-                9. **Sales Talking Points** (3-5 specific points for first meeting)
-                10. **Proposed MIGFORA Services**
-                
-                """.formatted(domain));
+                    You are a senior solutions architect at MIGFORA, a technology services
+                    company specializing in AWS, DevOps, and software development for
+                    Saudi Arabia and GCC clients.
+                    
+                    Based on the reconnaissance data below for %s, generate a strategic
+                    Sales Roadmap identifying specific opportunities for MIGFORA.
+                    Reference actual technologies found and give concrete talking points.
+                    
+                    Required sections:
+                    1. **Opportunity Summary** (pain points, why they need help)
+                    2. **AWS Migration Roadmap** (what to migrate and how)
+                    3. **Infrastructure Improvements** (HA, scaling, redundancy)
+                    4. **Security Hardening** (specific gaps and fixes)
+                    5. **Observability & Monitoring** (what's missing, what to add)
+                    6. **DevOps & CI/CD Improvements**
+                    7. **Performance Optimization**
+                    8. **Estimated Engagement** (Small/Medium/Large, timeline estimate)
+                    9. **Sales Talking Points** (3-5 specific points for first meeting)
+                    10. **Proposed MIGFORA Services**
+                    
+                    """.formatted(domain));
         }
 
         // ── Reconnaissance Data ───────────────────────────────────────────────────
@@ -483,7 +505,7 @@ public class ReportService {
     private String buildTitle(Report.ReportType type, String domain) {
         return switch (type) {
             case TECHNICAL_OVERVIEW -> "Technical Overview — " + domain;
-            case SALES_ROADMAP      -> "Sales Roadmap — " + domain;
+            case SALES_ROADMAP -> "Sales Roadmap — " + domain;
         };
     }
 
@@ -494,7 +516,10 @@ public class ReportService {
         int count = 0;
         for (String line : lines) {
             line = line.trim();
-            if (line.startsWith("#")) { foundHeader = true; continue; }
+            if (line.startsWith("#")) {
+                foundHeader = true;
+                continue;
+            }
             if (!foundHeader || line.isBlank()) continue;
             if (line.startsWith("#")) break;
             summary.append(line).append(" ");
@@ -509,9 +534,13 @@ public class ReportService {
     }
 
     private ReportResponse toResponse(Report r, String downloadUrl) {
+        CompanyPlatform platform = r.getPlatform();
         return new ReportResponse(
                 r.getId(), r.getType(), r.getStatus(),
-                r.getCompany().getId(), r.getCompany().getName(),
+                platform.getCompany().getId(),
+                platform.getCompany().getName(),
+                platform.getId(),
+                platform.getName(),
                 r.getInvestigation() != null ? r.getInvestigation().getId() : null,
                 r.getTitle(), r.getSummary(), r.getContent(),
                 r.getAiProvider(), r.getAiModel(), r.getTokenCount(),
@@ -524,13 +553,16 @@ public class ReportService {
         String downloadUrl = null;
         if (r.getS3Key() != null &&
                 r.getStatus() == Report.ReportStatus.COMPLETED) {
-            try {
-                downloadUrl = s3Service.generatePresignedUrl(r.getS3Key());
-            } catch (Exception ignored) {}
+            try { downloadUrl = s3Service.generatePresignedUrl(r.getS3Key()); }
+            catch (Exception ignored) {}
         }
+        CompanyPlatform platform = r.getPlatform();
         return new ReportListResponse(
                 r.getId(), r.getType(), r.getStatus(),
-                r.getCompany().getId(), r.getCompany().getName(),
+                platform.getCompany().getId(),
+                platform.getCompany().getName(),
+                platform.getId(),
+                platform.getName(),
                 r.getInvestigation() != null ? r.getInvestigation().getId() : null,
                 r.getTitle(), r.getSummary(),
                 r.getAiProvider(), downloadUrl,

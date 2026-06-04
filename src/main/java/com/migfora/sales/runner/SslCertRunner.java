@@ -139,15 +139,24 @@ public class SslCertRunner extends BaseRunner {
 
             if (response.statusCode() == 200) return response;
 
-            if (response.statusCode() == 502
+            if (response.statusCode() == 429) {
+                attempt++;
+                int waitSeconds = 30 * attempt;  // 30s, 60s, 90s
+                log.warn("crt.sh rate limited (429) — waiting {}s before retry {}/{}",
+                        waitSeconds, attempt, maxRetries);
+                Thread.sleep(waitSeconds * 1000L);
+
+            } else if (response.statusCode() == 502
                     || response.statusCode() == 503
                     || response.statusCode() == 504) {
                 attempt++;
                 log.warn("crt.sh returned {} — retrying {}/{} | waiting 5s",
                         response.statusCode(), attempt, maxRetries);
                 Thread.sleep(5000);
+
             } else {
-                return response;
+                // Non-retryable (404, 400, etc.)
+                throw new RuntimeException("crt.sh returned status " + response.statusCode());
             }
         }
         throw new RuntimeException("crt.sh failed after " + maxRetries + " retries");

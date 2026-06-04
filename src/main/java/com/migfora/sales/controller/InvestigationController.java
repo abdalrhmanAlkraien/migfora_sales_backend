@@ -1,9 +1,15 @@
 package com.migfora.sales.controller;
 
-import com.migfora.sales.dto.DashboardDtos;
-import com.migfora.sales.dto.InvestigationContextDtos.*;
-import com.migfora.sales.dto.InvestigationDtos.*;
-import com.migfora.sales.service.DashboardService;
+import com.migfora.sales.dto.InvestigationContextDtos.InvestigationContextResponse;
+import com.migfora.sales.dto.InvestigationDtos.CreateInvestigationRequest;
+import com.migfora.sales.dto.InvestigationDtos.InvestigationResponse;
+import com.migfora.sales.dto.InvestigationDtos.InvestigationSummaryResponse;
+import com.migfora.sales.dto.InvestigationDtos.ReconTaskLookupResponse;
+import com.migfora.sales.dto.InvestigationDtos.ReconTaskResponse;
+import com.migfora.sales.dto.InvestigationDtos.RunAllTasksRequest;
+import com.migfora.sales.dto.InvestigationDtos.RunTasksRequest;
+import com.migfora.sales.dto.InvestigationDtos.TaskReadinessRequest;
+import com.migfora.sales.dto.InvestigationDtos.TaskReadinessResponse;
 import com.migfora.sales.service.InvestigationContextService;
 import com.migfora.sales.service.InvestigationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,7 +24,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -37,7 +51,6 @@ public class InvestigationController {
 
     private final InvestigationService investigationService;
     private final InvestigationContextService investigationContextService;
-    private final DashboardService dashboardService;
 
     @Operation(summary = "Create a new investigation session for a company")
     @PostMapping
@@ -66,12 +79,12 @@ public class InvestigationController {
         return investigationService.runAll(id, request, jwt.getSubject());
     }
 
-    @Operation(summary = "Get all investigation sessions for a company")
-    @GetMapping("/company/{companyId}")
-    public Page<InvestigationSummaryResponse> getByCompany(
-            @PathVariable Long companyId,
+    @Operation(summary = "Get all investigation sessions for a platform")
+    @GetMapping("/platform/{platformId}")
+    public Page<InvestigationSummaryResponse> getByPlatform(
+            @PathVariable Long platformId,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-        return investigationService.getByCompany(companyId, pageable);
+        return investigationService.getByPlatform(platformId, pageable);
     }
 
     @Operation(summary = "Get full investigation with all task results")

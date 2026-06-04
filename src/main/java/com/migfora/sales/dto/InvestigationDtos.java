@@ -22,9 +22,10 @@ public class InvestigationDtos {
     // ── Requests ──────────────────────────────────────────────────────────────
 
     public record CreateInvestigationRequest(
-            @NotNull Long companyId,
-            @NotBlank String domain
+            @NotNull Long platformId,        // ← was companyId
+            String domain                    // ← optional, uses platform.domain if blank
     ) {}
+
 
     public record RunTasksRequest(
             @NotEmpty List<ReconTaskType> tasks
@@ -58,6 +59,9 @@ public class InvestigationDtos {
             InvestigationStatus status,
             Long companyId,
             String companyName,
+            Long platformId,
+            String platformName,
+            String platformType,
             String triggeredBy,
             List<ReconTaskResponse> tasks,
             LocalDateTime createdAt,
@@ -71,6 +75,9 @@ public class InvestigationDtos {
             InvestigationStatus status,
             Long companyId,
             String companyName,
+            Long platformId,                 // ← new
+            String platformName,             // ← new
+            String platformType,             // ← new
             String triggeredBy,
             int totalTasks,
             int completedTasks,
