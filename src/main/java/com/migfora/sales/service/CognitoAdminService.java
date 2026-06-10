@@ -74,6 +74,8 @@ public class CognitoAdminService {
     // ── Login ─────────────────────────────────────────────────────────────────
 
     public AuthenticationResultType login(String email, String password) {
+        log.info("Login attempt | email={} poolId={} clientId={}",
+                email, userPoolId, clientId);
         try {
             InitiateAuthResponse response = cognitoClient.initiateAuth(
                     InitiateAuthRequest.builder()
@@ -87,7 +89,10 @@ public class CognitoAdminService {
                             .build()
             );
 
-            if (response.challengeName() == ChallengeNameType.NEW_PASSWORD_REQUIRED) {
+            log.info("Cognito response | challengeName={} hasResult={}",
+                    response.challengeName(), response.authenticationResult() != null);
+
+            if (ChallengeNameType.NEW_PASSWORD_REQUIRED.equals(response.challengeName())) {
                 log.info("New password required | email={}", email);
                 throw new PasswordChangeRequiredException(
                         response.session(), "Password change required"
@@ -110,6 +115,10 @@ public class CognitoAdminService {
         } catch (TooManyRequestsException ex) {
             log.warn("Login failed — too many attempts | email={}", email);
             throw new AuthException("Too many attempts. Please try again later.");
+        } catch (Exception ex) {
+            log.error("Unexpected login error | email={} type={} message={}",
+                    email, ex.getClass().getName(), ex.getMessage(), ex);
+            throw new RuntimeException("Unexpected authentication error: " + ex.getMessage());
         }
     }
 
@@ -174,6 +183,9 @@ public class CognitoAdminService {
             return response.authenticationResult();
         } catch (NotAuthorizedException ex) {
             throw new AuthException("Refresh token is invalid or expired.");
+        }  catch (Exception ex) {
+            log.error("Unexpected refresh token error message={}", ex.getMessage(), ex);
+            throw new RuntimeException("Unexpected refresh toke error: " + ex.getMessage());
         }
     }
 
@@ -200,6 +212,10 @@ public class CognitoAdminService {
             throw new AuthException("Password does not meet requirements.");
         } catch (ExpiredCodeException ex) {
             throw new AuthException("Session expired. Please login again.");
+        } catch (Exception ex) {
+            log.error("Unexpected force change password error | email={} type={} message={}",
+                    email, ex.getClass().getName(), ex.getMessage(), ex);
+            throw new RuntimeException("Unexpected force change password error: " + ex.getMessage());
         }
     }
 

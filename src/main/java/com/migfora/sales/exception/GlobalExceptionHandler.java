@@ -1,5 +1,6 @@
 package com.migfora.sales.exception;
 
+import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
  * @Time: 11:34 PM
  */
 @RestControllerAdvice
+@Log4j2
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -47,6 +49,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Map<String, Object> handleGeneric(Exception ex) {
+
+        log.error("Unexpected Exception error | type={} message={}",
+                ex.getClass().getName(), ex.getMessage(), ex);
         return errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", null);
     }
 
