@@ -6,6 +6,14 @@ LABEL author="Abdalrhman ALkraien"
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    dnsutils \
+    nmap \
+    whois \
+    subfinder \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN addgroup --system migfora && adduser --system --ingroup migfora migfora
 
 COPY target/sales-0.0.1-SNAPSHOT.jar app.jar
@@ -22,4 +30,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
 ENTRYPOINT ["java", \
   "-XX:MaxRAMPercentage=75.0", \
   "-XX:InitialRAMPercentage=50.0", \
+  "--enable-preview", \
   "-jar", "app.jar"]
