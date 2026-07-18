@@ -1,5 +1,6 @@
 package com.migfora.sales.dto;
 
+import com.migfora.sales.entity.Company;
 import com.migfora.sales.entity.Company.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -27,6 +28,8 @@ public class CompanyDtos {
             String size,
             String notes,
             CompanyStatus status,
+            Company.LeadSource leadSource,    // ← new
+            String linkedinUrl,       // ← new
 
             @NotNull
             @Size(min = 1, message = "At least one platform is required")
@@ -43,7 +46,9 @@ public class CompanyDtos {
             String website,
             String size,
             String notes,
-            CompanyStatus status
+            CompanyStatus status,
+            Company.LeadSource leadSource,    // ← new
+            String linkedinUrl      // ← new
     ) {}
 
     public record CompanyResponse(
@@ -61,6 +66,8 @@ public class CompanyDtos {
             long investigationsCount,
             long contactsCount,
             long reportsCount,
+            Company.LeadSource leadSource,    // ← new
+            String linkedinUrl,       // ← new
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {}

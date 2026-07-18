@@ -54,6 +54,9 @@ public class CompanyService {
                 .notes(request.notes())
                 .createdBy(createdBy)
                 .status(request.status() != null ? request.status() : CompanyStatus.PROSPECT)
+                .linkedinUrl(request.linkedinUrl())      // ← new
+                .leadSource(request.leadSource())         // ← new
+
                 .build();
 
         // Build platforms and link to company
@@ -115,6 +118,8 @@ public class CompanyService {
         if (request.size()     != null) company.setSize(request.size());
         if (request.notes()    != null) company.setNotes(request.notes());
         if (request.status()   != null) company.setStatus(request.status());
+        if (request.linkedinUrl()   != null) company.setLinkedinUrl(request.linkedinUrl());
+        if (request.leadSource()   != null) company.setLeadSource(request.leadSource());
 
         log.info("Company updated | id={} by={}", id, updatedBy);
         return toResponse(companyRepository.save(company));
@@ -146,6 +151,8 @@ public class CompanyService {
                 contactRepository.countByCompanyId(c.getId()),
                 reportRepository.countByPlatformIdIn(
                         platforms.stream().map(PlatformDtos.PlatformResponse::id).toList()),
+                c.getLeadSource(),
+                c.getLinkedinUrl(),
                 c.getCreatedAt(), c.getUpdatedAt()
         );
     }

@@ -40,6 +40,13 @@ public class Company {
     @Column(nullable = false)
     private String createdBy;      // Cognito sub of the sales engineer
 
+    private String linkedinUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private LeadSource leadSource = LeadSource.LINKEDIN_SEARCH;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
@@ -60,5 +67,16 @@ public class Company {
 
     public enum CompanyStatus {
         PROSPECT, CONTACTED, QUALIFIED, PROPOSAL, CLOSED_WON, CLOSED_LOST
+    }
+
+    public enum LeadSource {
+        LINKEDIN_SEARCH,
+        LINKEDIN_CONTENT,
+        PERSONAL_NETWORK,
+        REFERRAL,
+        COLD_EMAIL,
+        EVENT_CONFERENCE,
+        INBOUND_WEBSITE,
+        OTHER
     }
 }
