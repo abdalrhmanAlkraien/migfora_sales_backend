@@ -6,13 +6,22 @@ LABEL author="Abdalrhman ALkraien"
 
 WORKDIR /app
 
+# Install recon tools from apt
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     dnsutils \
     nmap \
     whois \
-    subfinder \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install subfinder from GitHub releases
+RUN curl -sSL https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip \
+    -o subfinder.zip \
+    && unzip subfinder.zip subfinder \
+    && mv subfinder /usr/local/bin/subfinder \
+    && chmod +x /usr/local/bin/subfinder \
+    && rm subfinder.zip
 
 RUN addgroup --system migfora && adduser --system --ingroup migfora migfora
 
