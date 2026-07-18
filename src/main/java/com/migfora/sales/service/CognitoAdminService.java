@@ -17,7 +17,11 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeTy
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthFlowType;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AuthenticationResultType;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.ChallengeNameType;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.CodeMismatchException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.CognitoIdentityProviderException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ConfirmForgotPasswordRequest;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.ExpiredCodeException;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ForgotPasswordRequest;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.GetUserRequest;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.GetUserResponse;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.GroupType;
@@ -161,6 +165,7 @@ public class CognitoAdminService {
             );
 
         } catch (Exception ex) {
+
             log.error("Failed to get user info | error={}", ex.getMessage());
             throw new AuthException("Failed to retrieve user information.");
         }
@@ -294,6 +299,71 @@ public class CognitoAdminService {
         } catch (Exception ex) {
             log.error("Failed to get user by sub | sub={} error={}", userSub, ex.getMessage());
             throw new AuthException("Failed to retrieve user information.");
+        }
+    }
+
+    public void forgotPassword(String email) {
+        try {
+            cognitoClient.forgotPassword(ForgotPasswordRequest.builder()
+                    .clientId(clientId)
+                    .secretHash(computeSecretHash(email))   // ← add
+                    .username(email)
+                    .build());
+            log.info("[Auth] Forgot password code sent | email={}", email);
+        } catch (UserNotFoundException ex) {
+            log.warn("[Auth] Forgot password — user not found | email={}", email);
+        } catch (Exception ex) {
+            log.error("[Auth] Forgot password failed | email={} error={}", email, ex.getMessage());
+            throw new AuthException("Failed to send reset code.");
+        }
+    }
+
+
+    public void confirmForgotPassword(String email, String code, String newPassword) {
+        try {
+            cognitoClient.confirmForgotPassword(ConfirmForgotPasswordRequest.builder()
+                    .clientId(clientId)
+                    .secretHash(computeSecretHash(email))
+                    .username(email)
+                    .confirmationCode(code)
+                    .password(newPassword)
+                    .build());
+            log.info("[Auth] Password reset confirmed | email={}", email);
+
+        } catch (CodeMismatchException ex) {
+            log.warn("[Auth] Invalid reset code | email={}", email);
+            throw new AuthException("Invalid reset code.");
+
+        } catch (ExpiredCodeException ex) {
+            log.warn("[Auth] Reset code expired | email={}", email);
+            throw new AuthException("Reset code has expired. Please request a new one.");
+
+        } catch (UserNotFoundException ex) {
+            log.warn("[Auth] User not found | email={}", email);
+            throw new AuthException("User not found.");
+
+        } catch (InvalidPasswordException ex) {
+            log.warn("[Auth] Invalid password | email={} error={}", email, ex.getMessage());
+            throw new AuthException("Password does not meet requirements.");
+
+        } catch (CognitoIdentityProviderException ex) {
+            // Catch all Cognito exceptions and map by error code
+            String errorCode = ex.awsErrorDetails().errorCode();
+            String errorMsg  = ex.awsErrorDetails().errorMessage();
+            log.warn("[Auth] Cognito error | email={} code={} msg={}", email, errorCode, errorMsg);
+
+            throw switch (errorCode) {
+                case "ExpiredCodeException"   -> new AuthException("Reset code has expired. Please request a new one.");
+                case "CodeMismatchException"  -> new AuthException("Invalid reset code.");
+                case "InvalidPasswordException" -> new AuthException("Password does not meet requirements.");
+                case "UserNotFoundException"  -> new AuthException("User not found.");
+                case "LimitExceededException" -> new AuthException("Too many attempts. Please try again later.");
+                default -> new AuthException("Failed to reset password: " + errorMsg);
+            };
+
+        } catch (Exception ex) {
+            log.error("[Auth] Confirm forgot password failed | email={} error={}", email, ex.getMessage());
+            throw new AuthException("Failed to reset password.");
         }
     }
 

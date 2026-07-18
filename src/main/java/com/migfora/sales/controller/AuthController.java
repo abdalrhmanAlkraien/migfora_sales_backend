@@ -84,4 +84,20 @@ public class AuthController {
                 jwt.getClaimAsStringList("cognito:groups")
         ));
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<MessageResponse> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequestDto request) {
+        cognitoAdminService.forgotPassword(request.email());
+        return ResponseEntity.ok(new MessageResponse(
+                "If this email exists, a reset code has been sent."));
+    }
+
+    @PostMapping("/confirm-forgot-password")
+    public ResponseEntity<MessageResponse> confirmForgotPassword(
+            @Valid @RequestBody ConfirmForgotPasswordRequestDto request) {
+        cognitoAdminService.confirmForgotPassword(
+                request.email(), request.code(), request.newPassword());
+        return ResponseEntity.ok(new MessageResponse("Password reset successfully."));
+    }
 }

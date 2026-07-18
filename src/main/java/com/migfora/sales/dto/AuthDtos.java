@@ -79,4 +79,14 @@ public final class AuthDtos {
 
     public record MessageResponse(String message) {
     }
+
+    public record ForgotPasswordRequestDto(
+            @NotBlank @Email String email
+    ) {}
+
+    public record ConfirmForgotPasswordRequestDto(
+            @NotBlank @Email String email,
+            @NotBlank String code,
+            @NotBlank String newPassword
+    ) {}
 }

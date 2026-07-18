@@ -2,6 +2,7 @@ package com.migfora.sales.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +29,7 @@ import java.util.Map;
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
+@Log4j2
 public class SecurityConfig {
 
     @Value("${app.cors.allowed-origins:http://localhost:5173}")
@@ -37,6 +39,8 @@ public class SecurityConfig {
             "/api/v1/auth/login",
             "/api/v1/auth/refresh",
             "/api/v1/auth/change-password",
+            "/api/v1/auth/forgot-password",           // ← add
+            "/api/v1/auth/confirm-forgot-password",   // ← add
             "/actuator/health",
             "/actuator/info",
             "/api-docs",
@@ -64,22 +68,39 @@ public class SecurityConfig {
                                 .jwtAuthenticationConverter(cognitoJwtConverter())
                         )
                         .authenticationEntryPoint((request, response, ex) -> {
+                            // Log the reason
+                            String path  = request.getRequestURI();
+                            String token = request.getHeader("Authorization");
+                            String reason = ex.getMessage() != null ? ex.getMessage() : "Unknown";
+
+                            if (reason.toLowerCase().contains("expired")) {
+                                log.warn("[Auth] Token expired | path={} reason={}", path, reason);
+                            } else if (token == null || token.isBlank()) {
+                                log.warn("[Auth] Missing token | path={}", path);
+                            } else {
+                                log.warn("[Auth] Invalid token | path={} reason={}", path, reason);
+                            }
+
                             response.setStatus(HttpStatus.UNAUTHORIZED.value());
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             new ObjectMapper().writeValue(response.getWriter(),
                                     Map.of(
-                                            "error", "Unauthorized",
+                                            "error",   "Unauthorized",
                                             "message", "Missing or invalid token"
                                     ));
                         })
                 )
                 .exceptionHandling(ex -> ex
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            log.warn("[Auth] Access denied | path={} reason={}",
+                                    request.getRequestURI(),
+                                    accessDeniedException.getMessage());
+
                             response.setStatus(HttpStatus.FORBIDDEN.value());
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             new ObjectMapper().writeValue(response.getWriter(),
                                     Map.of(
-                                            "error", "Forbidden",
+                                            "error",   "Forbidden",
                                             "message", "You don't have permission"
                                     ));
                         })
