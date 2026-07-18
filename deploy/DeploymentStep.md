@@ -6,12 +6,11 @@ docker login --username AWS --password-stdin \
 
 
 
-- docker buildx build --platform linux/amd64 -t migfora-sales-api:1.0.11 --load .
+- docker buildx build --platform linux/amd64 -t migfora-sales-api:1.0.12 --load .
 
-- docker tag migfora-sales-api:1.0.11 \                                          
-984456404229.dkr.ecr.eu-central-1.amazonaws.com/migfora-sales-api:1.0.11
+docker tag migfora-sales-api:1.0.12 984456404229.dkr.ecr.eu-central-1.amazonaws.com/migfora-sales-api:1.0.12
 
-- docker push 984456404229.dkr.ecr.eu-central-1.amazonaws.com/migfora-sales-api:1.0.11
+- docker push 984456404229.dkr.ecr.eu-central-1.amazonaws.com/migfora-sales-api:1.0.12
 
 curl https://checkip.amazonaws.com
 

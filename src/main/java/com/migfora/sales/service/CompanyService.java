@@ -37,6 +37,7 @@ public class CompanyService {
     private final InvestigationRepository investigationRepository;
     private final ReportRepository reportRepository;
     private final CompanyPlatformService platformService;
+    private final NoteService noteService;
 
     @Transactional
     public CompanyResponse create(CreateCompanyRequest request, String createdBy) {
@@ -51,7 +52,6 @@ public class CompanyService {
                 .city(request.city())
                 .website(request.website())
                 .size(request.size())
-                .notes(request.notes())
                 .createdBy(createdBy)
                 .status(request.status() != null ? request.status() : CompanyStatus.PROSPECT)
                 .linkedinUrl(request.linkedinUrl())      // ← new
@@ -81,6 +81,11 @@ public class CompanyService {
         company.setPlatforms(platforms);
 
         Company saved = companyRepository.save(company);
+
+        if (request.notes() != null && !request.notes().isEmpty()) {
+            noteService.createBulk(saved, request.notes(), createdBy);  // ← saved has ID now
+        }
+
         log.info("Company created | id={} name={} by={}", saved.getId(), saved.getName(), createdBy);
         return toResponse(saved);
     }

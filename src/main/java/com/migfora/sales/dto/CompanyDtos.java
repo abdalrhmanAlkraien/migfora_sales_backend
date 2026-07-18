@@ -26,14 +26,14 @@ public class CompanyDtos {
             String city,
             String website,
             String size,
-            String notes,
             CompanyStatus status,
             Company.LeadSource leadSource,    // ← new
             String linkedinUrl,       // ← new
 
             @NotNull
             @Size(min = 1, message = "At least one platform is required")
-            List<PlatformDtos.CreatePlatformRequest> platforms
+            List<PlatformDtos.CreatePlatformRequest> platforms,
+            List<String> notes
 
     ) {}
 
