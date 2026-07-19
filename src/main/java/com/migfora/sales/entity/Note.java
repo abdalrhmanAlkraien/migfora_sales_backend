@@ -27,10 +27,19 @@ public class Note {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "contact_id")
+    private Contact contact;        // nullable — only set when type=CONTACT
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private NoteType type;          // COMPANY or CONTACT
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
     private String createdBy;
+    private String createdByName;   // display name — for UI
 
     @CreatedDate
     @Column(updatable = false)
@@ -38,4 +47,9 @@ public class Note {
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    public enum NoteType {
+        COMPANY,
+        CONTACT
+    }
 }

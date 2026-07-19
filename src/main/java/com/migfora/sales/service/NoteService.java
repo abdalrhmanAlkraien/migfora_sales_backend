@@ -3,10 +3,14 @@ package com.migfora.sales.service;
 import com.migfora.sales.dto.NoteDtos.CreateNoteRequest;
 import com.migfora.sales.dto.NoteDtos.NoteResponse;
 import com.migfora.sales.dto.NoteDtos.UpdateNoteRequest;
+import com.migfora.sales.dto.UserDtos;
 import com.migfora.sales.entity.Company;
+import com.migfora.sales.entity.Contact;
 import com.migfora.sales.entity.Note;
+import com.migfora.sales.exception.AuthException;
 import com.migfora.sales.exception.ResourceNotFoundException;
 import com.migfora.sales.repository.CompanyRepository;
+import com.migfora.sales.repository.ContactRepository;
 import com.migfora.sales.repository.NoteRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -29,11 +33,13 @@ public class NoteService {
 
     private final NoteRepository noteRepository;
     private final CompanyRepository companyRepository;
+    private final UserManagementService userManagementService;
+    private final ContactRepository contactRepository;
 
     // ── Add note ──────────────────────────────────────────────────────────────
 
     @Transactional
-    public NoteResponse create(Long companyId,
+    public NoteResponse createForCompany(Long companyId,
                                CreateNoteRequest request,
                                String createdBy) {
         Company company = companyRepository.findById(companyId)
@@ -50,7 +56,7 @@ public class NoteService {
         log.info("[Note] Created | id={} company={} by={}",
                 note.getId(), companyId, createdBy);
 
-        return toResponse(note);
+        return toResponse(note, createdBy);
     }
 
     @Transactional
@@ -60,16 +66,18 @@ public class NoteService {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Company not found: " + companyId));
-
+        String createdByName = resolveUserName(createdBy);
         return requests.stream()
                 .filter(r -> r.content() != null && !r.content().isBlank())
                 .map(r -> {
                     Note note = Note.builder()
+                            .type(Note.NoteType.COMPANY)    // ← add this
                             .company(company)
                             .content(r.content())
                             .createdBy(createdBy)
+                            .createdByName(createdByName)
                             .build();
-                    return toResponse(noteRepository.save(note));
+                    return toResponse(noteRepository.save(note), createdBy);
                 })
                 .toList();
     }
@@ -100,35 +108,83 @@ public class NoteService {
     // ── Get notes by company ──────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public Page<NoteResponse> getByCompany(Long companyId, Pageable pageable) {
+    public Page<NoteResponse> getByCompany(Long companyId, String createdBy, Pageable pageable) {
         return noteRepository
                 .findByCompanyIdOrderByCreatedAtDesc(companyId, pageable)
-                .map(this::toResponse);
+                .map(note -> toResponse(noteRepository.save(note), createdBy));
     }
 
-    // ── Update note ───────────────────────────────────────────────────────────
+    @Transactional
+    public List<NoteResponse> createBulkForContact(Long contactId,
+                                                   List<CreateNoteRequest> requests,
+                                                   String createdBy) {
+        Contact contact = contactRepository.findById(contactId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Contact not found: " + contactId));
+        String createdByName = resolveUserName(createdBy);
+        return requests.stream()
+                .filter(r -> r.content() != null && !r.content().isBlank())
+                .map(r -> {
+                    Note note = Note.builder()
+                            .type(Note.NoteType.CONTACT)
+                            .contact(contact)
+                            .content(r.content())
+                            .createdBy(createdBy)
+                            .createdByName(createdByName)
+                            .build();
+                    return toResponse(noteRepository.save(note), createdBy);
+                })
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<NoteResponse> getByContact(Long contactId, String createdBy, Pageable pageable) {
+        return noteRepository
+                .findByContactIdOrderByCreatedAtDesc(contactId, pageable)
+                .map(note -> toResponse(noteRepository.save(note), createdBy));
+    }
+
+    // ── Shared update/delete with ownership check ─────────────────────────────
 
     @Transactional
     public NoteResponse update(Long id,
                                UpdateNoteRequest request,
-                               String updatedBy) {
+                               String requestedBy) {
         Note note = findById(id);
+        checkOwnership(note, requestedBy);
         note.setContent(request.content());
         note = noteRepository.save(note);
-        log.info("[Note] Updated | id={} by={}", id, updatedBy);
-        return toResponse(note);
+        log.info("[Note] Updated | id={} by={}", id, requestedBy);
+        return toResponse(note, requestedBy);
     }
 
-    // ── Delete note ───────────────────────────────────────────────────────────
-
     @Transactional
-    public void delete(Long id, String deletedBy) {
-        findById(id);
+    public void delete(Long id, String requestedBy) {
+        Note note = findById(id);
+        checkOwnership(note, requestedBy);
         noteRepository.deleteById(id);
-        log.info("[Note] Deleted | id={} by={}", id, deletedBy);
+        log.info("[Note] Deleted | id={} by={}", id, requestedBy);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void checkOwnership(Note note, String requestedBy) {
+        if (!note.getCreatedBy().equals(requestedBy)) {
+            throw new AuthException(
+                    "You can only update or delete your own notes.");
+        }
+    }
+
+    private String resolveUserName(String sub) {
+        try {
+            UserDtos.UserDetailResponse user =
+                    userManagementService.getUserBySub(sub);
+            return user.name() + " " + user.familyName();
+        } catch (Exception ex) {
+            log.warn("[Note] Could not resolve user name | sub={}", sub);
+            return sub;
+        }
+    }
 
     private Note findById(Long id) {
         return noteRepository.findById(id)
@@ -136,15 +192,19 @@ public class NoteService {
                         "Note not found: " + id));
     }
 
-    private NoteResponse toResponse(Note n) {
+    private NoteResponse toResponse(Note n, String currentUserSub) {
         return new NoteResponse(
                 n.getId(),
-                n.getCompany().getId(),
-                n.getCompany().getName(),
+                n.getType(),
+                n.getCompany()  != null ? n.getCompany().getId()  : null,
+                n.getContact()  != null ? n.getContact().getId()  : null,
                 n.getContent(),
                 n.getCreatedBy(),
+                n.getCreatedByName(),
+                n.getCreatedBy().equals(currentUserSub),   // ← isOwner
                 n.getCreatedAt(),
                 n.getUpdatedAt()
         );
     }
+
 }

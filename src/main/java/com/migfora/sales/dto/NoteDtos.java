@@ -1,5 +1,6 @@
 package com.migfora.sales.dto;
 
+import com.migfora.sales.entity.Note;
 import jakarta.validation.constraints.NotBlank;
 
 import java.time.LocalDateTime;
@@ -21,10 +22,13 @@ public class NoteDtos {
 
     public record NoteResponse(
             Long id,
+            Note.NoteType type,
             Long companyId,
-            String companyName,
+            Long contactId,
             String content,
             String createdBy,
+            String createdByName,
+            boolean isOwner,            // ← new
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {}

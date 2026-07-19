@@ -5,7 +5,6 @@ import com.migfora.sales.service.NoteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,20 +33,19 @@ public class NoteController {
     @Operation(summary = "Add note to company")
     @PostMapping("/api/v1/companies/{companyId}/notes")
     @ResponseStatus(HttpStatus.CREATED)
-    public NoteResponse create(
+    public NoteResponse createForCompany(
             @PathVariable Long companyId,
             @Valid @RequestBody CreateNoteRequest request,
             @AuthenticationPrincipal Jwt jwt) {
-        return noteService.create(companyId, request, jwt.getSubject());
+        return noteService.createForCompany(companyId, request, jwt.getSubject());
     }
 
-    @Operation(summary = "Add multiple notes to a company")
+    @Operation(summary = "Add bulk notes to company")
     @PostMapping("/api/v1/companies/{companyId}/notes/bulk")
     @ResponseStatus(HttpStatus.CREATED)
-    public List<NoteResponse> createBulk(
+    public List<NoteResponse> createBulkForCompany(
             @PathVariable Long companyId,
-            @RequestBody @Size(min = 1, message = "At least one note is required")
-            List<@Valid CreateNoteRequest> requests,
+            @RequestBody List<@Valid CreateNoteRequest> requests,
             @AuthenticationPrincipal Jwt jwt) {
         return noteService.createBulkApi(companyId, requests, jwt.getSubject());
     }
@@ -56,11 +54,35 @@ public class NoteController {
     @GetMapping("/api/v1/companies/{companyId}/notes")
     public Page<NoteResponse> getByCompany(
             @PathVariable Long companyId,
+            @AuthenticationPrincipal Jwt jwt,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-        return noteService.getByCompany(companyId, pageable);
+        return noteService.getByCompany(companyId, jwt.getSubject(), pageable);
     }
 
-    @Operation(summary = "Update note")
+    // ── Contact notes ─────────────────────────────────────────────────────────
+
+    @Operation(summary = "Add bulk notes to contact")
+    @PostMapping("/api/v1/contacts/{contactId}/notes/bulk")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<NoteResponse> createBulkForContact(
+            @PathVariable Long contactId,
+            @RequestBody List<@Valid CreateNoteRequest> requests,
+            @AuthenticationPrincipal Jwt jwt) {
+        return noteService.createBulkForContact(contactId, requests, jwt.getSubject());
+    }
+
+    @Operation(summary = "Get all notes for a contact")
+    @GetMapping("/api/v1/contacts/{contactId}/notes")
+    public Page<NoteResponse> getByContact(
+            @PathVariable Long contactId,
+            @AuthenticationPrincipal Jwt jwt,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+        return noteService.getByContact(contactId, jwt.getSubject(), pageable);
+    }
+
+    // ── Shared update/delete ──────────────────────────────────────────────────
+
+    @Operation(summary = "Update note — owner only")
     @PatchMapping("/api/v1/notes/{id}")
     public NoteResponse update(
             @PathVariable Long id,
@@ -69,7 +91,7 @@ public class NoteController {
         return noteService.update(id, request, jwt.getSubject());
     }
 
-    @Operation(summary = "Delete note")
+    @Operation(summary = "Delete note — owner only")
     @DeleteMapping("/api/v1/notes/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
