@@ -54,20 +54,21 @@ public class CompanyDtos {
     public record CompanyResponse(
             Long id,
             String name,
+            String domain,
+            String website,
+            String linkedinUrl,
+            String size,
             String industry,
             String country,
             String city,
-            String website,
-            String size,
             String notes,
             String createdBy,
-            CompanyStatus status,
-            List<PlatformDtos.PlatformResponse> platforms,       // ← included in response
+            Company.CompanyStatus status,
+            Company.LeadSource leadSource,
+            List<PlatformDtos.PlatformResponse> platforms,
             long investigationsCount,
             long contactsCount,
             long reportsCount,
-            Company.LeadSource leadSource,    // ← new
-            String linkedinUrl,       // ← new
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {}

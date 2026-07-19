@@ -147,18 +147,27 @@ public class CompanyService {
     public CompanyResponse toResponse(Company c) {
         List<PlatformDtos.PlatformResponse> platforms = platformService.getByCompany(c.getId());
         return new CompanyResponse(
-                c.getId(), c.getName(), c.getWebsite(), c.getSize(),   // ← company-level fields
-                c.getIndustry(), c.getCountry(), c.getCity(),
-                c.getNotes(), c.getCreatedBy(), c.getStatus(),
+                c.getId(),
+                c.getName(),
+                c.getDomain(),
+                c.getWebsite(),
+                c.getLinkedinUrl(),
+                c.getSize(),
+                c.getIndustry(),
+                c.getCountry(),
+                c.getCity(),
+                c.getNotes(),
+                c.getCreatedBy(),
+                c.getStatus(),
+                c.getLeadSource(),
                 platforms,
                 investigationRepository.countByPlatformIdIn(
                         platforms.stream().map(PlatformDtos.PlatformResponse::id).toList()),
                 contactRepository.countByCompanyId(c.getId()),
                 reportRepository.countByPlatformIdIn(
                         platforms.stream().map(PlatformDtos.PlatformResponse::id).toList()),
-                c.getLeadSource(),
-                c.getLinkedinUrl(),
-                c.getCreatedAt(), c.getUpdatedAt()
+                c.getCreatedAt(),
+                c.getUpdatedAt()
         );
     }
 
