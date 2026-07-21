@@ -54,11 +54,15 @@ public class FollowUp {
     private LocalDateTime updatedAt;
 
     public enum FollowUpType {
-        CALL,
-        VISIT,
-        MEETING,
-        EMAIL,
-        WHATSAPP
+        CALL,           // Phone call
+        VISIT,          // In-person visit
+        MEETING,        // Online or in-person meeting
+        EMAIL,          // Email outreach
+        WHATSAPP,       // WhatsApp message
+        LINKEDIN,       // LinkedIn message or connection request
+        SMS,            // Text message
+        PROPOSAL,       // Send a proposal or quote
+        DEMO            // Product demo session
     }
 
     public enum FollowUpStatus {
