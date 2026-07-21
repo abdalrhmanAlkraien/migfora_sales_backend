@@ -30,7 +30,6 @@ public class Contact {
     private String email;
     private String phone;
     private String linkedIn;
-    private String notes;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default

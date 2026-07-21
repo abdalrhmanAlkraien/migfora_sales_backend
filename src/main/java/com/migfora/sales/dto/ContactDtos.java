@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -24,8 +25,8 @@ public class ContactDtos {
             String email,
             String phone,
             String linkedIn,
-            String notes,
-            ContactStatus status          // optional — defaults to NEW
+            ContactStatus status,          // optional — defaults to NEW
+            List<String> notes             // ← replace String notes with List
     ) {}
 
     public record UpdateContactRequest(
@@ -51,7 +52,6 @@ public class ContactDtos {
             String email,
             String phone,
             String linkedIn,
-            String notes,
             ContactStatus status,
             Long companyId,
             String companyName,

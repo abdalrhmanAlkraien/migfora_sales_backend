@@ -28,7 +28,10 @@ public class Company {
     @Column(nullable = false)
     private String name;
 
-    private String industry;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "industry_id")
+    private IndustryLookup industry;
+
     private String country;
     private String city;
     private String domain;

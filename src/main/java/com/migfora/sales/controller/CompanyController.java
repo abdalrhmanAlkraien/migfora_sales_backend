@@ -22,6 +22,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * @author: Abd-alrhman Alkraien.
  * @Date: 31/05/2026
@@ -53,8 +55,9 @@ public class CompanyController {
     public Page<CompanyResponse> getAll(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Company.CompanyStatus status,
+            @RequestParam(required = false) List<Long> industryIds,   // ← list
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-        return companyService.getAll(search, status, pageable);
+        return companyService.getAll(search, status, industryIds, pageable);
     }
 
     @Operation(summary = "Get company by ID")

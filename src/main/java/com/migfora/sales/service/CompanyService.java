@@ -5,6 +5,7 @@ import com.migfora.sales.dto.PlatformDtos;
 import com.migfora.sales.entity.Company;
 import com.migfora.sales.entity.Company.*;
 import com.migfora.sales.entity.CompanyPlatform;
+import com.migfora.sales.entity.IndustryLookup;
 import com.migfora.sales.exception.AuthException;
 import com.migfora.sales.repository.CompanyRepository;
 import com.migfora.sales.repository.ContactRepository;
@@ -38,6 +39,7 @@ public class CompanyService {
     private final ReportRepository reportRepository;
     private final CompanyPlatformService platformService;
     private final NoteService noteService;
+    private final IndustryLookupService industryLookupService;
 
     @Transactional
     public CompanyResponse create(CreateCompanyRequest request, String createdBy) {
@@ -45,9 +47,12 @@ public class CompanyService {
             throw new AuthException("A company with this domain already exists.");
         }
 
+        IndustryLookup industry = industryLookupService
+                .validateAndGetById(request.industryId());
+
         Company company = Company.builder()
                 .name(request.name())
-                .industry(request.industry())
+                .industry(industry)
                 .country(request.country())
                 .city(request.city())
                 .website(request.website())
@@ -93,16 +98,16 @@ public class CompanyService {
     @Transactional(readOnly = true)
     public Page<CompanyResponse> getAll(String search,
                                         CompanyStatus status,
+                                        List<Long> industryId,           // ← new
                                         Pageable pageable) {
         String statusStr = status != null ? status.name() : null;
 
-        // Strip sort from pageable — our native query handles ORDER BY
         Pageable unsorted = PageRequest.of(
                 pageable.getPageNumber(),
                 pageable.getPageSize()
         );
 
-        return companyRepository.search(search, statusStr, unsorted)
+        return companyRepository.search(search, statusStr, industryId, unsorted)
                 .map(this::toResponse);
     }
 
@@ -115,8 +120,11 @@ public class CompanyService {
     public CompanyResponse update(Long id, UpdateCompanyRequest request, String updatedBy) {
         Company company = findById(id);
 
+        IndustryLookup industry = industryLookupService
+                .validateAndGetById(request.industryId());
+
         if (request.name()     != null) company.setName(request.name());
-        if (request.industry() != null) company.setIndustry(request.industry());
+        if (request.industryId() != null) company.setIndustry(industry);
         if (request.country()  != null) company.setCountry(request.country());
         if (request.city()     != null) company.setCity(request.city());
         if (request.website()  != null) company.setWebsite(request.website());
@@ -153,7 +161,8 @@ public class CompanyService {
                 c.getWebsite(),
                 c.getLinkedinUrl(),
                 c.getSize(),
-                c.getIndustry(),
+                c.getIndustry() != null ? c.getIndustry().getId()   : null,
+                c.getIndustry() != null ? c.getIndustry().getName() : null,
                 c.getCountry(),
                 c.getCity(),
                 c.getNotes(),

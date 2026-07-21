@@ -1,7 +1,7 @@
 package com.migfora.sales.dto;
 
 import com.migfora.sales.entity.Company;
-import com.migfora.sales.entity.Company.*;
+import com.migfora.sales.entity.Company.CompanyStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -21,7 +21,7 @@ public class CompanyDtos {
     public record CreateCompanyRequest(
             @NotBlank String name,
             String domain,
-            String industry,
+            @NotNull Long industryId,
             String country,
             String city,
             String website,
@@ -35,12 +35,13 @@ public class CompanyDtos {
             List<PlatformDtos.CreatePlatformRequest> platforms,
             List<String> notes
 
-    ) {}
+    ) {
+    }
 
     public record UpdateCompanyRequest(
             String name,
             String domain,
-            String industry,
+            Long industryId,
             String country,
             String city,
             String website,
@@ -49,7 +50,8 @@ public class CompanyDtos {
             CompanyStatus status,
             Company.LeadSource leadSource,    // ← new
             String linkedinUrl      // ← new
-    ) {}
+    ) {
+    }
 
     public record CompanyResponse(
             Long id,
@@ -58,7 +60,8 @@ public class CompanyDtos {
             String website,
             String linkedinUrl,
             String size,
-            String industry,
+            Long industryId,              // ← new
+            String industryName,          // ← new
             String country,
             String city,
             String notes,
@@ -71,5 +74,6 @@ public class CompanyDtos {
             long reportsCount,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
-    ) {}
+    ) {
+    }
 }

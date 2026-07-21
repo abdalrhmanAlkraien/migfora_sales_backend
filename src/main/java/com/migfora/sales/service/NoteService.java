@@ -86,22 +86,22 @@ public class NoteService {
 
     @Transactional
     public void createBulk(Company company,
-                           java.util.List<String> contents,
+                           List<String> contents,
                            String createdBy) {
         if (contents == null || contents.isEmpty()) return;
-
+        String createdByName = resolveUserName(createdBy);
         contents.stream()
                 .filter(c -> c != null && !c.isBlank())
-                .forEach(content -> {
-                    Note note = Note.builder()
-                            .company(company)
-                            .content(content)
-                            .createdBy(createdBy)
-                            .build();
-                    noteRepository.save(note);
-                });
-
-        log.info("[Note] Bulk created | company={} count={} by={}",
+                .forEach(content -> noteRepository.save(
+                        Note.builder()
+                                .type(Note.NoteType.COMPANY)    // ← this must be here
+                                .company(company)
+                                .content(content)
+                                .createdBy(createdBy)
+                                .createdByName(createdByName)
+                                .build()
+                ));
+        log.info("[Note] Bulk created for company | company={} count={} by={}",
                 company.getId(), contents.size(), createdBy);
     }
 

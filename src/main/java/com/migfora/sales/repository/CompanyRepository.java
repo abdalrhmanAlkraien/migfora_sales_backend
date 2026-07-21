@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -21,22 +22,25 @@ public interface CompanyRepository extends JpaRepository<Company, Long> {
     boolean existsByWebsite(String website);
 
     @Query(value = """
-        SELECT * FROM companies c
-        WHERE (CAST(:search AS text) IS NULL OR
-               LOWER(CAST(c.name AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
-               OR LOWER(CAST(c.domain AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
-        AND (CAST(:status AS text) IS NULL OR CAST(c.status AS text) = CAST(:status AS text))
-        ORDER BY c.created_at DESC
-        """,
-            countQuery = """
-        SELECT COUNT(*) FROM companies c
-        WHERE (CAST(:search AS text) IS NULL OR
-               LOWER(CAST(c.name AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
-               OR LOWER(CAST(c.domain AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
-        AND (CAST(:status AS text) IS NULL OR CAST(c.status AS text) = CAST(:status AS text))
-        """,
-            nativeQuery = true)
+    SELECT * FROM companies c
+    WHERE (CAST(:search AS text) IS NULL OR
+           LOWER(CAST(c.name AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+           OR LOWER(CAST(c.domain AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+    AND (CAST(:status AS text) IS NULL OR CAST(c.status AS text) = CAST(:status AS text))
+    AND (:#{#industryIds == null || #industryIds.isEmpty()} = true
+         OR c.industry_id IN (:industryIds))
+    ORDER BY c.created_at DESC
+    """, countQuery = """
+    SELECT COUNT(*) FROM companies c
+    WHERE (CAST(:search AS text) IS NULL OR
+           LOWER(CAST(c.name AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+           OR LOWER(CAST(c.domain AS text)) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+    AND (CAST(:status AS text) IS NULL OR CAST(c.status AS text) = CAST(:status AS text))
+    AND (:#{#industryIds == null || #industryIds.isEmpty()} = true
+         OR c.industry_id IN (:industryIds))
+    """, nativeQuery = true)
     Page<Company> search(@Param("search") String search,
                          @Param("status") String status,
+                         @Param("industryIds") List<Long> industryIds,
                          Pageable pageable);
 }

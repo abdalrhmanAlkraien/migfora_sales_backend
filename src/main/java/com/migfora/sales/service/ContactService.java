@@ -1,15 +1,17 @@
 package com.migfora.sales.service;
 
 import com.migfora.sales.dto.ContactDtos.*;
-import com.migfora.sales.entity.Company;
+import com.migfora.sales.dto.UserDtos;
 import com.migfora.sales.entity.Contact;
 import com.migfora.sales.entity.Contact.*;
 import com.migfora.sales.entity.FollowUp;
 import com.migfora.sales.entity.FollowUp.*;
+import com.migfora.sales.entity.Note;
 import com.migfora.sales.exception.AuthException;
 import com.migfora.sales.repository.CompanyRepository;
 import com.migfora.sales.repository.ContactRepository;
 import com.migfora.sales.repository.FollowUpRepository;
+import com.migfora.sales.repository.NoteRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -35,6 +37,9 @@ public class ContactService {
     private final ContactRepository contactRepository;
     private final CompanyRepository companyRepository;
     private final FollowUpRepository followUpRepository;
+    private final NoteRepository noteRepository;
+    private final UserManagementService userManagementService;
+
 
     // ── Contacts ──────────────────────────────────────────────────────────────
 
@@ -51,14 +56,33 @@ public class ContactService {
                 .email(request.email())
                 .phone(request.phone())
                 .linkedIn(request.linkedIn())
-                .notes(request.notes())
                 .status(request.status() != null ? request.status() : ContactStatus.NEW)
                 .company(company)
                 .createdBy(createdBy)
                 .build();
 
         Contact saved = contactRepository.save(contact);
-        log.info("Contact created | id={} company={} by={}", saved.getId(), companyId, createdBy);
+
+        // Save notes if provided
+        if (request.notes() != null && !request.notes().isEmpty()) {
+            request.notes().stream()
+                    .filter(c -> c != null && !c.isBlank())
+                    .forEach(content -> noteRepository.save(
+                            Note.builder()
+                                    .type(Note.NoteType.CONTACT)
+                                    .contact(saved)
+                                    .content(content)
+                                    .createdBy(createdBy)
+                                    .createdByName(resolveUserName(createdBy))
+                                    .build()
+                    ));
+        }
+
+        log.info("Contact created | id={} company={} notes={} by={}",
+                saved.getId(), companyId,
+                request.notes() != null ? request.notes().size() : 0,
+                createdBy);
+
         return toResponse(saved);
     }
 
@@ -87,7 +111,6 @@ public class ContactService {
         if (request.email()    != null) contact.setEmail(request.email());
         if (request.phone()    != null) contact.setPhone(request.phone());
         if (request.linkedIn() != null) contact.setLinkedIn(request.linkedIn());
-        if (request.notes()    != null) contact.setNotes(request.notes());
         if (request.status()   != null) contact.setStatus(request.status());
 
         log.info("Contact updated | id={} by={}", id, updatedBy);
@@ -211,7 +234,7 @@ public class ContactService {
 
         return new ContactResponse(
                 c.getId(), c.getName(), c.getTitle(),
-                c.getEmail(), c.getPhone(), c.getLinkedIn(), c.getNotes(),
+                c.getEmail(), c.getPhone(), c.getLinkedIn(),
                 c.getStatus(),
                 c.getCompany().getId(), c.getCompany().getName(),
                 c.getCreatedBy(),
@@ -256,5 +279,15 @@ public class ContactService {
                 contact.getId(),
                 contact.getNextFollowUpAt(),
                 contact.getLastFollowUpAt());
+    }
+
+    private String resolveUserName(String sub) {
+        try {
+            UserDtos.UserDetailResponse user =
+                    userManagementService.getUserBySub(sub);
+            return user.name() + " " + user.familyName();
+        } catch (Exception ex) {
+            return sub;
+        }
     }
 }
