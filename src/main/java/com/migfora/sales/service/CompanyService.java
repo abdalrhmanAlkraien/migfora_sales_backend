@@ -7,8 +7,10 @@ import com.migfora.sales.entity.Company.*;
 import com.migfora.sales.entity.CompanyPlatform;
 import com.migfora.sales.entity.IndustryLookup;
 import com.migfora.sales.exception.AuthException;
+import com.migfora.sales.repository.CompanyPlatformRepository;
 import com.migfora.sales.repository.CompanyRepository;
 import com.migfora.sales.repository.ContactRepository;
+import com.migfora.sales.repository.IndustryLookupRepository;
 import com.migfora.sales.repository.InvestigationRepository;
 import com.migfora.sales.repository.ReportRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * @author: Abd-alrhman Alkraien.
@@ -40,7 +44,8 @@ public class CompanyService {
     private final CompanyPlatformService platformService;
     private final NoteService noteService;
     private final IndustryLookupService industryLookupService;
-
+    private final CompanyPlatformRepository platformRepository;
+    private final IndustryLookupRepository industryLookupRepository;
     @Transactional
     public CompanyResponse create(CreateCompanyRequest request, String createdBy) {
         if (request.website() != null && companyRepository.existsByWebsite(request.website())) {
@@ -98,17 +103,154 @@ public class CompanyService {
     @Transactional(readOnly = true)
     public Page<CompanyResponse> getAll(String search,
                                         CompanyStatus status,
-                                        List<Long> industryId,           // ← new
+                                        List<Long> industryIds,
                                         Pageable pageable) {
         String statusStr = status != null ? status.name() : null;
-
         Pageable unsorted = PageRequest.of(
                 pageable.getPageNumber(),
                 pageable.getPageSize()
         );
 
-        return companyRepository.search(search, statusStr, industryId, unsorted)
-                .map(this::toResponse);
+        Page<Company> page = companyRepository
+                .search(search, statusStr, industryIds, unsorted);
+
+        if (page.isEmpty()) return page.map(c -> toResponse(c));
+
+        List<Long> companyIds = page.getContent()
+                .stream().map(Company::getId).toList();
+
+        // Platforms
+        Map<Long, List<CompanyPlatform>> platformsByCompany =
+                platformRepository.findByCompanyIdInWithCompany(companyIds)
+                        .stream()
+                        .collect(Collectors.groupingBy(p -> p.getCompany().getId()));
+
+        List<Long> platformIds = platformsByCompany.values().stream()
+                .flatMap(List::stream)
+                .map(CompanyPlatform::getId)
+                .toList();
+
+        // Investigation counts per platform
+        Map<Long, Long> investigationByPlatform = platformIds.isEmpty()
+                ? Map.of()
+                : investigationRepository.countGroupByPlatformId(platformIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        r -> ((Number) r[0]).longValue(),
+                        r -> ((Number) r[1]).longValue()));
+
+        // Investigation counts per company (sum of platforms)
+        Map<Long, Long> investigationCounts = platformsByCompany.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().stream()
+                                .mapToLong(p -> investigationByPlatform
+                                        .getOrDefault(p.getId(), 0L))
+                                .sum()
+                ));
+
+        // Contact counts per company
+        Map<Long, Long> contactCounts =
+                contactRepository.countGroupByCompanyId(companyIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                r -> ((Number) r[0]).longValue(),
+                                r -> ((Number) r[1]).longValue()));
+
+        // Report counts per platform
+        Map<Long, Long> reportByPlatform = platformIds.isEmpty()
+                ? Map.of()
+                : reportRepository.countGroupByPlatformId(platformIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        r -> ((Number) r[0]).longValue(),
+                        r -> ((Number) r[1]).longValue()));
+
+        // Report counts per company (sum of platforms)
+        Map<Long, Long> reportCounts = platformsByCompany.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().stream()
+                                .mapToLong(p -> reportByPlatform
+                                        .getOrDefault(p.getId(), 0L))
+                                .sum()
+                ));
+
+        // Industries in bulk
+        List<Long> industryIdList = page.getContent().stream()
+                .filter(c -> c.getIndustry() != null)
+                .map(c -> c.getIndustry().getId())
+                .distinct()
+                .toList();
+
+        Map<Long, IndustryLookup> industriesById = industryIdList.isEmpty()
+                ? Map.of()
+                : industryLookupRepository.findAllById(industryIdList)
+                .stream()
+                .collect(Collectors.toMap(IndustryLookup::getId, i -> i));
+
+        return page.map(c -> toBulkResponse(
+                c,
+                platformsByCompany.getOrDefault(c.getId(), List.of()),
+                investigationCounts.getOrDefault(c.getId(), 0L),
+                contactCounts.getOrDefault(c.getId(), 0L),
+                reportCounts.getOrDefault(c.getId(), 0L),
+                investigationByPlatform,
+                reportByPlatform,
+                industriesById
+        ));
+    }
+
+    private CompanyResponse toBulkResponse(Company c,
+                                           List<CompanyPlatform> platforms,
+                                           long investigationsCount,
+                                           long contactsCount,
+                                           long reportsCount,
+                                           Map<Long, Long> investigationByPlatform,
+                                           Map<Long, Long> reportByPlatform,
+                                           Map<Long, IndustryLookup> industriesById) {
+
+        List<PlatformDtos.PlatformResponse> platformResponses = platforms.stream()
+                .map(p -> new PlatformDtos.PlatformResponse(
+                        p.getId(),
+                        p.getCompany().getId(),
+                        p.getCompany().getName(),
+                        p.getType(),
+                        p.getName(),
+                        p.getUrl(),
+                        p.getDomain(),
+                        p.getBundleId(),
+                        p.getAppStoreUrl(),
+                        p.getPlayStoreUrl(),
+                        p.getDescription(),
+                        p.getStatus(),
+                        p.getTechnology(),
+                        p.getHostingProvider(),
+                        p.getNotes(),
+                        investigationByPlatform.getOrDefault(p.getId(), 0L),
+                        reportByPlatform.getOrDefault(p.getId(), 0L),
+                        p.getCreatedAt(),
+                        p.getUpdatedAt()
+                ))
+                .toList();
+
+        IndustryLookup industry = c.getIndustry() != null
+                ? industriesById.get(c.getIndustry().getId())
+                : null;
+
+        return new CompanyResponse(
+                c.getId(), c.getName(), c.getDomain(), c.getWebsite(),
+                c.getLinkedinUrl(), c.getSize(),
+                industry != null ? industry.getId()   : null,
+                industry != null ? industry.getName() : null,
+                c.getCountry(), c.getCity(), c.getNotes(),
+                c.getCreatedBy(), c.getStatus(), c.getLeadSource(),
+                platformResponses,
+                investigationsCount,
+                contactsCount,
+                reportsCount,
+                c.getCreatedAt(), c.getUpdatedAt()
+        );
     }
 
     @Transactional(readOnly = true)

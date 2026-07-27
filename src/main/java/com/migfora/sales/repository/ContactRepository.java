@@ -46,4 +46,11 @@ public interface ContactRepository extends JpaRepository<Contact, Long> {
     GROUP BY c.status
     """)
     List<Object[]> countByStatus();
+
+    @Query(value = """
+    SELECT company_id, COUNT(*) FROM contacts
+    WHERE company_id IN (:companyIds)
+    GROUP BY company_id
+    """, nativeQuery = true)
+    List<Object[]> countGroupByCompanyId(@Param("companyIds") List<Long> companyIds);
 }

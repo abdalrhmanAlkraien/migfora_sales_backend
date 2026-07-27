@@ -43,4 +43,20 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     WHERE r.id = :id
     """)
     Optional<Report> findByIdWithPlatform(@Param("id") Long id);
-}
+
+    @Query(value = """
+    SELECT p.company_id, COUNT(r.id)
+    FROM reports r
+    JOIN company_platforms p ON r.platform_id = p.id
+    WHERE p.company_id IN (:companyIds)
+    GROUP BY p.company_id
+    """, nativeQuery = true)
+    List<Object[]> countGroupByCompanyId(@Param("companyIds") List<Long> companyIds);
+
+    @Query(value = """
+    SELECT platform_id, COUNT(*) FROM reports
+    WHERE platform_id IN (:platformIds)
+    GROUP BY platform_id
+    """, nativeQuery = true)
+    List<Object[]> countGroupByPlatformId(@Param("platformIds") List<Long> platformIds);}
+

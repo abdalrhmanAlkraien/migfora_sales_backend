@@ -119,7 +119,8 @@ public class CompanyPlatformService {
         }
     }
 
-    private PlatformResponse toResponse(CompanyPlatform p) {
+
+    public PlatformResponse toResponse(CompanyPlatform p) {
         long investigationsCount = investigationRepository
                 .countByPlatformId(p.getId());
 

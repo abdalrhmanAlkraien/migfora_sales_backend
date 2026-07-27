@@ -33,4 +33,20 @@ public interface InvestigationRepository extends JpaRepository<Investigation, Lo
     @Query("SELECT i FROM Investigation i WHERE i.platform.company.id = :companyId")
     Page<Investigation> findByCompanyId(@Param("companyId") Long companyId, Pageable pageable);
 
+    @Query(value = """
+    SELECT p.company_id, COUNT(i.id)
+    FROM investigations i
+    JOIN company_platforms p ON i.platform_id = p.id
+    WHERE p.company_id IN (:companyIds)
+    GROUP BY p.company_id
+    """, nativeQuery = true)
+    List<Object[]> countGroupByCompanyId(@Param("companyIds") List<Long> companyIds);
+
+    @Query(value = """
+    SELECT platform_id, COUNT(*) FROM investigations
+    WHERE platform_id IN (:platformIds)
+    GROUP BY platform_id
+    """, nativeQuery = true)
+    List<Object[]> countGroupByPlatformId(@Param("platformIds") List<Long> platformIds);
+
 }
